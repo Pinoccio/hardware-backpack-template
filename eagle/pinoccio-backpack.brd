@@ -153,16 +153,16 @@
 <text x="22.292" y="23.7746" size="1.016" layer="21" font="vector" ratio="15" rot="R180">A0</text>
 <text x="3.3366" y="8.873" size="1.016" layer="21" font="vector" ratio="15">D8</text>
 <text x="-10.4394" y="-8.3312" size="1.27" layer="51" font="vector" ratio="15">http://pinocc.io</text>
-<text x="3.3112" y="36.8984" size="1.016" layer="21" font="vector" ratio="15">GND</text>
+<text x="3.3112" y="36.8984" size="1.016" layer="21" font="vector" ratio="15">BKPK</text>
 <text x="3.1588" y="38.8476" size="1.016" layer="21" font="vector" ratio="15">VUSB</text>
 <text x="22.3174" y="39.9016" size="1.016" layer="21" font="vector" ratio="15" rot="R180">3V3</text>
 <text x="22.292" y="37.927" size="1.016" layer="21" font="vector" ratio="15" rot="R180">GND</text>
 <text x="22.292" y="33.9204" size="1.016" layer="21" font="vector" ratio="15" rot="R180">RX1</text>
-<text x="22.3174" y="35.8828" size="1.016" layer="21" font="vector" ratio="15" rot="R180">VBAT</text>
+<text x="22.3174" y="35.8828" size="1.016" layer="21" font="vector" ratio="15" rot="R180">BAT</text>
 <text x="22.292" y="31.8508" size="1.016" layer="21" font="vector" ratio="15" rot="R180">TX1</text>
 <text x="22.3174" y="29.8508" size="1.016" layer="21" font="vector" ratio="15" rot="R180">SCL</text>
 <text x="-10.414" y="-6.604" size="1.27" layer="51" font="vector" ratio="15">Design by: Eric Jennings for Pinoccio</text>
-<text x="-10.3632" y="-4.8514" size="1.778" layer="51" font="vector" ratio="15">Pinoccio(tm) Shield Reference v0.10</text>
+<text x="-10.3632" y="-4.8514" size="1.778" layer="51" font="vector" ratio="15">Pinoccio(tm) Shield Reference v0.11</text>
 <wire x1="0" y1="50.8" x2="25.4" y2="50.8" width="0.2032" layer="20"/>
 <text x="3.3366" y="28.8984" size="1.016" layer="21" font="vector" ratio="15">MOSI</text>
 <text x="3.3366" y="26.8984" size="1.016" layer="21" font="vector" ratio="15">SS</text>
@@ -393,7 +393,6 @@ Please make sure your boards conform to these design rules.</description>
 </elements>
 <signals>
 <signal name="GND" class="5">
-<contactref element="JP-L" pad="P$2"/>
 <contactref element="JP-R" pad="P$2"/>
 <polygon width="0.4064" layer="1">
 <vertex x="0.0762" y="50.9524"/>
@@ -414,7 +413,6 @@ Please make sure your boards conform to these design rules.</description>
 <vertex x="25.3746" y="50.8762"/>
 <vertex x="0.1016" y="50.8762"/>
 </polygon>
-<wire x1="2.032" y1="37.37" x2="23.368" y2="37.37" width="0" layer="19" extent="1-1"/>
 </signal>
 <signal name="MOSI">
 <contactref element="JP-L" pad="P$6"/>
@@ -442,10 +440,6 @@ Please make sure your boards conform to these design rules.</description>
 </signal>
 <signal name="VUSB">
 <contactref element="JP-L" pad="P$1"/>
-</signal>
-<signal name="VBAT-AE">
-<contactref element="JP-R" pad="P$3"/>
-<wire x1="23.368" y1="35.3568" x2="23.368" y2="35.37" width="0.3048" layer="16"/>
 </signal>
 <signal name="SSN">
 <contactref element="JP-L" pad="P$7"/>
@@ -535,6 +529,12 @@ Please make sure your boards conform to these design rules.</description>
 <signal name="D8">
 <contactref element="JP-L" pad="P$16"/>
 <wire x1="2.032" y1="9.3726" x2="2.032" y2="9.37" width="0.3048" layer="16"/>
+</signal>
+<signal name="BKPK-BUS">
+<contactref element="JP-L" pad="P$2"/>
+</signal>
+<signal name="VBAT">
+<contactref element="JP-R" pad="P$3"/>
 </signal>
 </signals>
 </board>
