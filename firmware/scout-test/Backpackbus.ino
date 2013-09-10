@@ -109,18 +109,20 @@ void bp_scan() {
     }
 }
 
-void bp_read_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
+void bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
     bp_write_byte(addr);
     bp_write_byte(0x01);
+    bp_write_byte(offset);
     while (len--)
         *buf++ = bp_read_byte();
 }
 
-void bp_write_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
+void bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
     bp_write_byte(addr);
     bp_write_byte(0x02);
+    bp_write_byte(offset);
     while (len--) {
         Serial << V<Hex>(*buf);
         bp_write_byte(*buf++);
@@ -137,8 +139,8 @@ void setup() {
 uint8_t eeprom_written = false;
 
 
-void print_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
-    bp_read_eeprom(addr, buf, len);
+void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+    bp_read_eeprom(addr, offset, buf, len);
     Serial << "Device " << V<Hex>(addr) << ": ";
     while (len--)
         Serial << V<Hex>(*buf++);
@@ -152,7 +154,7 @@ void loop() {
     bp_scan();
     delay(100);
     Serial << "Reading EEPROM..." << endl;
-    print_eeprom(0x00, buf, sizeof(buf));
+    print_eeprom(0x00, 0, buf, sizeof(buf));
     if (!eeprom_written) {
         delay(100);
         Serial << "Incrementing..." << endl;
@@ -160,11 +162,11 @@ void loop() {
             buf[i]++;
         digitalWrite(3, HIGH);
         digitalWrite(3, LOW);
-        bp_write_eeprom(0x00, buf, sizeof(buf));
+        bp_write_eeprom(0x00, 0, buf, sizeof(buf));
         eeprom_written = true;
     }
     delay(100);
-    print_eeprom(0x01, buf, sizeof(buf));
+    print_eeprom(0x01, 0, buf, sizeof(buf));
 }
 
 /* vim: set filetype=cpp sw=4 sts=4 expandtab: */

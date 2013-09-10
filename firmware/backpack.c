@@ -116,7 +116,14 @@ enum {
     STATE_READ_ADDRESS,
     STATE_SEND_ADDRESS,
     STATE_READ_COMMAND,
-    STATE_WRITE_EEPROM,
+    // CMD_READ_EEPROM received, now receiving read address
+    STATE_READ_EEPROM_ADDR,
+    // CMD_READ_EEPROM and read address received, now reading
+    STATE_READ_EEPROM_READ,
+    // CMD_WRITE_EEPROM received, now receiving write address
+    STATE_WRITE_EEPROM_ADDR,
+    // CMD_WRITE_EEPROM and write address received, now writing
+    STATE_WRITE_EEPROM_WRITE,
 };
 
 // Note that the falling edge interrupt is _always_ enabled, so if a
@@ -290,16 +297,16 @@ int main(void)
             } else if (state == STATE_READ_COMMAND) {
                 switch (byte_buf) {
                     case CMD_READ_EEPROM:
-                        action = ACTION_SEND | ACTION_STALL;
-                        next_byte = 0;
+                        action = ACTION_RECEIVE;
+                        state = STATE_READ_EEPROM_ADDR;
+                        byte_buf = 0;
                         next_bit = 1;
                         break;
                     case CMD_WRITE_EEPROM:
-                        state = STATE_WRITE_EEPROM;
+                        state = STATE_WRITE_EEPROM_ADDR;
                         action = ACTION_RECEIVE;
-                        next_byte = 0;
-                        next_bit = 1;
                         byte_buf = 0;
+                        next_bit = 1;
                         break;
                     default:
                         // Unknown command
@@ -307,7 +314,18 @@ int main(void)
                         state = STATE_IDLE;
                         break;
                 }
-            } else if (state == STATE_WRITE_EEPROM) {
+            } else if (state == STATE_READ_EEPROM_ADDR) {
+                next_byte = byte_buf;
+                next_bit = 1;
+                action = ACTION_SEND | ACTION_STALL;
+                state = STATE_READ_EEPROM_READ;
+            } else if (state == STATE_WRITE_EEPROM_ADDR) {
+                next_byte = byte_buf;
+                next_bit = 1;
+                byte_buf = 0;
+                action = ACTION_RECEIVE;
+                state = STATE_WRITE_EEPROM_WRITE;
+            } else if (state == STATE_WRITE_EEPROM_WRITE) {
                 // Write the byte received, but refuse to write our id
                 if (next_byte >= ID_OFFSET + ID_SIZE)
                     EEPROM_write(next_byte, byte_buf);
