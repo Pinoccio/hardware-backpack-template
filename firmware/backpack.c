@@ -364,17 +364,19 @@ int main(void)
                         // paying attention
                         state = STATE_IDLE;
                         action = ACTION_IDLE;
-                        continue;
+                        break;
                     }
                 }
+                /* FALLTHROUGH */
+            case STATE_READ_EEPROM_READ:
+                // Read and send next EEPROM byte
+                byte_buf = EEPROM_read(next_byte);
+                next_byte++;
+                next_bit = 1;
+                action = ACTION_SEND;
                 break;
             }
 
-            // Read and send next EEPROM byte
-            byte_buf = EEPROM_read(next_byte);
-            next_byte++;
-            next_bit = 1;
-            action = ACTION_SEND;
         }
 
         cli();
