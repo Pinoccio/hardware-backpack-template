@@ -277,7 +277,8 @@ int main(void)
     while(true) {
         if (action == (ACTION_RECEIVE | ACTION_STALL)) {
             // Done receiving a byte
-            if (state == STATE_READ_ADDRESS) {
+            switch(state) {
+            case STATE_READ_ADDRESS:
                 if (byte_buf == BC_CMD_DISCOVER) {
                     state = STATE_SEND_ADDRESS;
                     action = ACTION_SEND | ACTION_STALL;
@@ -289,12 +290,14 @@ int main(void)
                     state = STATE_READ_COMMAND;
                     byte_buf = 0;
                     next_bit = 1;
+                    pulse(PINB0);
                 } else {
                     // We're not addressed, stop paying attention
                     action = ACTION_IDLE;
                     state = STATE_IDLE;
                 }
-            } else if (state == STATE_READ_COMMAND) {
+                break;
+            case STATE_READ_COMMAND:
                 switch (byte_buf) {
                     case CMD_READ_EEPROM:
                         action = ACTION_RECEIVE;
@@ -314,18 +317,22 @@ int main(void)
                         state = STATE_IDLE;
                         break;
                 }
-            } else if (state == STATE_READ_EEPROM_ADDR) {
+                break;
+            case STATE_READ_EEPROM_ADDR:
                 next_byte = byte_buf;
                 next_bit = 1;
                 action = ACTION_SEND | ACTION_STALL;
                 state = STATE_READ_EEPROM_READ;
-            } else if (state == STATE_WRITE_EEPROM_ADDR) {
+                break;
+            case STATE_WRITE_EEPROM_ADDR:
                 next_byte = byte_buf;
                 next_bit = 1;
                 byte_buf = 0;
                 action = ACTION_RECEIVE;
                 state = STATE_WRITE_EEPROM_WRITE;
-            } else if (state == STATE_WRITE_EEPROM_WRITE) {
+                break;
+            case STATE_WRITE_EEPROM_WRITE:
+                pulse(PINB4);
                 // Write the byte received, but refuse to write our id
                 if (next_byte >= ID_OFFSET + ID_SIZE)
                     EEPROM_write(next_byte, byte_buf);
@@ -335,13 +342,14 @@ int main(void)
                 next_bit = 1;
                 byte_buf = 0;
                 action = ACTION_RECEIVE;
+                break;
             }
         }
 
         if (action == (ACTION_SEND | ACTION_STALL)) {
-            // Ready to send the next (or first) byte
-            if (state == STATE_SEND_ADDRESS &&
-                next_byte == ID_OFFSET + ID_SIZE) {
+            switch(state) {
+            case STATE_SEND_ADDRESS:
+                if (next_byte == ID_OFFSET + ID_SIZE) {
                     // Entire address sent
                     if (mute) {
                         // Another device had a lower id, so try again
@@ -358,6 +366,8 @@ int main(void)
                         action = ACTION_IDLE;
                         continue;
                     }
+                }
+                break;
             }
 
             // Read and send next EEPROM byte
