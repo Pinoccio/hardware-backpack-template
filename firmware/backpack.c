@@ -114,7 +114,7 @@ enum {
 enum {
     STATE_IDLE,
     STATE_READ_ADDRESS,
-    STATE_SEND_ADDRESS,
+    STATE_SEND_UNIQUE_ID,
     STATE_READ_COMMAND,
     // CMD_READ_EEPROM received, now receiving read address
     STATE_READ_EEPROM_ADDR,
@@ -280,7 +280,7 @@ int main(void)
             switch(state) {
             case STATE_READ_ADDRESS:
                 if (byte_buf == BC_CMD_DISCOVER) {
-                    state = STATE_SEND_ADDRESS;
+                    state = STATE_SEND_UNIQUE_ID;
                     action = ACTION_SEND | ACTION_STALL;
                     next_byte = ID_OFFSET;
                     bus_addr = 0;
@@ -348,7 +348,7 @@ int main(void)
 
         if (action == (ACTION_SEND | ACTION_STALL)) {
             switch(state) {
-            case STATE_SEND_ADDRESS:
+            case STATE_SEND_UNIQUE_ID:
                 if (next_byte == ID_OFFSET + ID_SIZE) {
                     // Entire address sent
                     if (mute) {
@@ -356,7 +356,7 @@ int main(void)
                         // on the next round
                         next_byte = 0;
                         bus_addr++;
-                        state = STATE_SEND_ADDRESS;
+                        state = STATE_SEND_UNIQUE_ID;
                         mute = false;
                     } else {
                         // We have the lowest id sent during this round,
