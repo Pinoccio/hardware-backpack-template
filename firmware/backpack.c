@@ -87,6 +87,7 @@ enum {
 // Read EEPROM command
 enum {
     CMD_READ_EEPROM = 0x01,
+    CMD_WRITE_EEPROM = 0x02,
 };
 
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
@@ -115,6 +116,7 @@ enum {
     STATE_READ_ADDRESS,
     STATE_SEND_ADDRESS,
     STATE_READ_COMMAND,
+    STATE_WRITE_EEPROM,
 };
 
 // Note that the falling edge interrupt is _always_ enabled, so if a
@@ -292,12 +294,29 @@ int main(void)
                         next_byte = 0;
                         next_bit = 1;
                         break;
+                    case CMD_WRITE_EEPROM:
+                        state = STATE_WRITE_EEPROM;
+                        action = ACTION_RECEIVE;
+                        next_byte = 0;
+                        next_bit = 1;
+                        byte_buf = 0;
+                        break;
                     default:
                         // Unknown command
                         action = ACTION_IDLE;
                         state = STATE_IDLE;
                         break;
                 }
+            } else if (state == STATE_WRITE_EEPROM) {
+                // Write the byte received, but refuse to write our id
+                if (next_byte >= ID_OFFSET + ID_SIZE)
+                    EEPROM_write(next_byte, byte_buf);
+                // Advance to the next byte (even when we refused to
+                // write).
+                next_byte++;
+                next_bit = 1;
+                byte_buf = 0;
+                action = ACTION_RECEIVE;
             }
         }
 
