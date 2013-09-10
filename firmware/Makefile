@@ -12,3 +12,7 @@ all:
 
 dump:
 	avr-objdump -D backpack.elf | less
+
+# Output assembly with addresses removed for easy diffing
+diffdump:
+	avr-objdump -D backpack.elf | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
