@@ -44,33 +44,6 @@
     _NOP(); _NOP(); _NOP(); \
     PORTB |= (1 << pin);
 
-void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
-{
-      /* Wait for completion of previous write */
-    while(EECR & (1<<EEPE));
-    /* Set Programming mode */
-    EECR = (0<<EEPM1)|(0>>EEPM0);
-    /* Set up address and data registers */
-    EEARL = ucAddress;
-    EEDR = ucData;
-    /* Write logical one to EEMPE */
-    EECR |= (1<<EEMPE);
-    /* Start eeprom write by setting EEPE */
-    EECR |= (1<<EEPE);
-}
-
-uint8_t EEPROM_read(uint8_t ucAddress)
-{
-    /* Wait for completion of previous write */
-    while(EECR & (1<<EEPE));
-    /* Set up address register */
-    EEARL = ucAddress;
-    /* Start eeprom read by writing EERE */
-    EECR |= (1<<EERE);
-    /* Return data from data register */
-    return EEDR;
-}
-
 // Offset of the unique ID within the EEPROM
 uint8_t const ID_SIZE = 4;
 // Size of the unique ID
@@ -248,6 +221,32 @@ ISR(TIM0_COMPA_vect)
     TIMSK0 &= ~(1 << OCIE0A);
 }
 
+void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
+{
+      /* Wait for completion of previous write */
+    while(EECR & (1<<EEPE));
+    /* Set Programming mode */
+    EECR = (0<<EEPM1)|(0>>EEPM0);
+    /* Set up address and data registers */
+    EEARL = ucAddress;
+    EEDR = ucData;
+    /* Write logical one to EEMPE */
+    EECR |= (1<<EEMPE);
+    /* Start eeprom write by setting EEPE */
+    EECR |= (1<<EEPE);
+}
+
+uint8_t EEPROM_read(uint8_t ucAddress)
+{
+    /* Wait for completion of previous write */
+    while(EECR & (1<<EEPE));
+    /* Set up address register */
+    EEARL = ucAddress;
+    /* Start eeprom read by writing EERE */
+    EECR |= (1<<EERE);
+    /* Return data from data register */
+    return EEDR;
+}
 
 int main(void)
 {
