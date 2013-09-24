@@ -101,8 +101,8 @@ uint8_t byte_buf;
 uint8_t next_bit;
 uint8_t next_byte;
 
-uint8_t bus_addr = 0xff;
-bool mute = false;
+uint8_t bus_addr;
+bool mute;
 
 volatile uint8_t action; //state
 volatile uint8_t state; //state
@@ -258,6 +258,8 @@ uint8_t EEPROM_read(uint8_t ucAddress)
 
 void setup(void)
 {
+    bus_addr = 0xff;
+    mute = false;
     action = ACTION_IDLE;
     state = STATE_IDLE;
     // Set ports to output for debug
