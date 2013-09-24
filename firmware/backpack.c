@@ -97,6 +97,14 @@ enum {
     STATE_WRITE_EEPROM_WRITE,
 };
 
+enum {
+    TIMA_ACTION_NONE = 0,
+    TIMA_ACTION_RELEASE = 1,
+    TIMA_ACTION_NEXT_BIT = 2,
+    TIMA_ACTION_READ = 4,
+    TIMA_ACTION_CHECK_COLLISION = 8,
+};
+
 // Putting global variables in fixed registers saves a lot of
 // instructions for loading and storing their values to memory.
 // Additionally, if _all_ globals are in registers (or declared with
@@ -114,6 +122,8 @@ register bool mute asm("r6");
 
 register uint8_t action asm("r7");
 register uint8_t state asm("r8");
+
+register uint8_t timera_action asm("r9");
 
 // Note that the falling edge interrupt is _always_ enabled, so if a
 // falling edge occurs before the previous bit period is processed (e.g.
@@ -146,30 +156,33 @@ ISR(INT0_vect)
     MCUCR |= (1<<ISC01);
     set_sleep_mode(SLEEP_MODE_IDLE);
 
+    timera_action = TIMA_ACTION_NONE;
     if (action & ACTION_ACK) {
         // Pull the line low
-        DDRB |= (1 << PINB1);
         // Let if float again after some time
-        OCR0A = DATA_WRITE;
-        TIMSK0 |=  (1 << OCIE0A);
+        timera_action = TIMA_ACTION_RELEASE;
+        action &= ~ACTION_ACK;
     } else if (action & ACTION_STALL) {
         ;
     } else if (action & ACTION_RECEIVE) {
-        OCR0A = DATA_SAMPLE; //wait a time for reading
-        TIMSK0 |=  (1 << OCIE0A);
+        timera_action = TIMA_ACTION_READ | TIMA_ACTION_NEXT_BIT;
     } else if (action & ACTION_SEND) {
         if ((byte_buf & next_bit) == 0 && !mute) {
             // Pull the line low
-            DDRB |= (1 << PINB1);
             // Let if float again after some time
-            OCR0A = DATA_WRITE;
-            TIMSK0 |=  (1 << OCIE0A);
+            timera_action = TIMA_ACTION_RELEASE | TIMA_ACTION_NEXT_BIT;
         } else {
             // Check for address collisions
-            OCR0A = DATA_SAMPLE;
-            TIMSK0 |=  (1 << OCIE0A);
+            timera_action = TIMA_ACTION_CHECK_COLLISION | TIMA_ACTION_NEXT_BIT;
         }
     }
+    OCR0A = DATA_SAMPLE;
+    if (timera_action & TIMA_ACTION_RELEASE) {
+        OCR0A = DATA_WRITE;
+        DDRB |= (1 << PINB1);
+    }
+    if (timera_action)
+        TIMSK0 |=  (1 << OCIE0A);
 }
 
 
@@ -199,39 +212,33 @@ ISR(TIM0_COMPB_vect)
 ISR(TIM0_COMPA_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
-    if (action & ACTION_ACK) {
-        // Timer means end of period, we should stop pulling the line low
-        DDRB &= ~(1 << PINB1);
-        // Ack is sent, start the real data
-        action &= ~ACTION_ACK;
-    } else if (action & ACTION_RECEIVE) {
-        // Read and store bit value
-        if (val)
-            byte_buf |= next_bit;
-        next_bit <<= 1;
 
-        // Full byte received? Stall while main loop to process
-        if (!next_bit)
-            action |= ACTION_STALL;
-    } else if (action & ACTION_SEND) {
-        if ((DDRB & (1 << PINB1)) == 0 && !val) {
+    if (timera_action & TIMA_ACTION_RELEASE) {
+        // Release the line
+        DDRB &= ~(1 << PINB1);
+    }
+
+    if (timera_action & TIMA_ACTION_CHECK_COLLISION) {
+        if (!val) {
             // We're sending our address, but are not currently pulling the
             // line low. Check if the line is actually high. If not, someone
             // else is pulling the line low, so we drop out of the current
             // address sending round.
             mute = true;
         }
+    }
 
-        // If we're pulling the line low to send a 0, timer means end of
-        // period, we should stop pulling the line low
-        // If we're leaving the line high to send a 1, timer means to
-        // check for collision, but it doesn't hurt to "stop" pulling
-        // the line low (which we aren't in the first place).
-        DDRB &= ~(1 << PINB1);
 
+    if (timera_action & TIMA_ACTION_READ) {
+        // Read and store bit value
+        if (val)
+            byte_buf |= next_bit;
+    }
+
+    if (timera_action & TIMA_ACTION_NEXT_BIT) {
         next_bit <<= 1;
 
-        // Sent full byte? Stall while the mainloop decides what to do
+        // Full byte received? Stall while main loop to process
         if (!next_bit)
             action |= ACTION_STALL;
     }
