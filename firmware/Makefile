@@ -7,7 +7,7 @@ AVRDUDE_PART=t13
 
 all: upload
 
-backpack.elf: backpack.c
+backpack.elf: backpack.c Makefile
 	avr-gcc -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
 
 backpack.hex: backpack.elf
