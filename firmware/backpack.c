@@ -256,7 +256,7 @@ uint8_t EEPROM_read(uint8_t ucAddress)
     return EEDR;
 }
 
-int main(void)
+void setup(void)
 {
     action = ACTION_IDLE;
     state = STATE_IDLE;
@@ -281,127 +281,136 @@ int main(void)
     sleep_enable();
 
     sei();
-    while(true) {
-        if (action == (ACTION_RECEIVE | ACTION_STALL)) {
-            // Done receiving a byte
-            switch(state) {
-            case STATE_READ_ADDRESS:
-                if (byte_buf == BC_CMD_ENUMERATE) {
-                    state = STATE_ENUMERATE;
-                    action = ACTION_SEND | ACTION_STALL;
-                    next_byte = ID_OFFSET;
-                    bus_addr = 0;
-                } else if (byte_buf == bus_addr) {
-                    // We're addressed, find out what the master wants
+}
+
+void loop(void)
+{
+    if (action == (ACTION_RECEIVE | ACTION_STALL)) {
+        // Done receiving a byte
+        switch(state) {
+        case STATE_READ_ADDRESS:
+            if (byte_buf == BC_CMD_ENUMERATE) {
+                state = STATE_ENUMERATE;
+                action = ACTION_SEND | ACTION_STALL;
+                next_byte = ID_OFFSET;
+                bus_addr = 0;
+            } else if (byte_buf == bus_addr) {
+                // We're addressed, find out what the master wants
+                action = ACTION_RECEIVE;
+                state = STATE_READ_COMMAND;
+                byte_buf = 0;
+                next_bit = 1;
+                pulse(PINB0);
+            } else {
+                // We're not addressed, stop paying attention
+                action = ACTION_IDLE;
+                state = STATE_IDLE;
+            }
+            break;
+        case STATE_READ_COMMAND:
+            switch (byte_buf) {
+                case CMD_READ_EEPROM:
                     action = ACTION_RECEIVE;
-                    state = STATE_READ_COMMAND;
+                    state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
-                    pulse(PINB0);
-                } else {
-                    // We're not addressed, stop paying attention
+                    break;
+                case CMD_WRITE_EEPROM:
+                    state = STATE_WRITE_EEPROM_ADDR;
+                    action = ACTION_RECEIVE;
+                    byte_buf = 0;
+                    next_bit = 1;
+                    break;
+                default:
+                    // Unknown command
                     action = ACTION_IDLE;
                     state = STATE_IDLE;
-                }
-                break;
-            case STATE_READ_COMMAND:
-                switch (byte_buf) {
-                    case CMD_READ_EEPROM:
-                        action = ACTION_RECEIVE;
-                        state = STATE_READ_EEPROM_ADDR;
-                        byte_buf = 0;
-                        next_bit = 1;
-                        break;
-                    case CMD_WRITE_EEPROM:
-                        state = STATE_WRITE_EEPROM_ADDR;
-                        action = ACTION_RECEIVE;
-                        byte_buf = 0;
-                        next_bit = 1;
-                        break;
-                    default:
-                        // Unknown command
-                        action = ACTION_IDLE;
-                        state = STATE_IDLE;
-                        break;
-                }
-                break;
-            case STATE_READ_EEPROM_ADDR:
-                next_byte = byte_buf;
-                next_bit = 1;
-                action = ACTION_SEND | ACTION_STALL;
-                state = STATE_READ_EEPROM_READ;
-                break;
-            case STATE_WRITE_EEPROM_ADDR:
-                next_byte = byte_buf;
-                next_bit = 1;
-                byte_buf = 0;
-                action = ACTION_RECEIVE;
-                state = STATE_WRITE_EEPROM_WRITE;
-                break;
-            case STATE_WRITE_EEPROM_WRITE:
-                pulse(PINB4);
-                // Write the byte received, but refuse to write our id
-                if (next_byte >= ID_OFFSET + ID_SIZE)
-                    EEPROM_write(next_byte, byte_buf);
-                // Advance to the next byte (even when we refused to
-                // write).
-                next_byte++;
-                next_bit = 1;
-                byte_buf = 0;
-                action = ACTION_RECEIVE;
-                break;
+                    break;
             }
+            break;
+        case STATE_READ_EEPROM_ADDR:
+            next_byte = byte_buf;
+            next_bit = 1;
+            action = ACTION_SEND | ACTION_STALL;
+            state = STATE_READ_EEPROM_READ;
+            break;
+        case STATE_WRITE_EEPROM_ADDR:
+            next_byte = byte_buf;
+            next_bit = 1;
+            byte_buf = 0;
+            action = ACTION_RECEIVE;
+            state = STATE_WRITE_EEPROM_WRITE;
+            break;
+        case STATE_WRITE_EEPROM_WRITE:
+            pulse(PINB4);
+            // Write the byte received, but refuse to write our id
+            if (next_byte >= ID_OFFSET + ID_SIZE)
+                EEPROM_write(next_byte, byte_buf);
+            // Advance to the next byte (even when we refused to
+            // write).
+            next_byte++;
+            next_bit = 1;
+            byte_buf = 0;
+            action = ACTION_RECEIVE;
+            break;
         }
-
-        if (action == (ACTION_SEND | ACTION_STALL)) {
-            switch(state) {
-            case STATE_ENUMERATE:
-                if (next_byte == ID_OFFSET + ID_SIZE) {
-                    // Entire address sent
-                    if (mute) {
-                        // Another device had a lower id, so try again
-                        // on the next round
-                        next_byte = 0;
-                        bus_addr++;
-                        state = STATE_ENUMERATE;
-                        mute = false;
-                    } else {
-                        // We have the lowest id sent during this round,
-                        // so claim the current bus address and stop
-                        // paying attention
-                        state = STATE_IDLE;
-                        action = ACTION_IDLE;
-                        break;
-                    }
-                }
-                /* FALLTHROUGH */
-            case STATE_READ_EEPROM_READ:
-                // Read and send next EEPROM byte
-                byte_buf = EEPROM_read(next_byte);
-                next_byte++;
-                next_bit = 1;
-                action = ACTION_SEND;
-                break;
-            }
-
-        }
-
-        cli();
-        // Only sleep if the main loop isn't supposed to do anything, to
-        // prevent deadlock. There's a magic dance here to make sure
-        // an interrupt does not set the ACTION_STALL bit after we
-        // checked for it but before entering sleep mode
-        if (!(action & ACTION_STALL)) {
-            // The instruction after sei is guaranteed to execute before
-            // any interrupts are triggered, so we can be sure the sleep
-            // mode is entered, with interrupts enabled, but before any
-            // interrupts fire (possibly leaving it again directly if an
-            // interrupt is pending).
-            sei();
-            sleep_cpu();
-        }
-        sei();
     }
+
+    if (action == (ACTION_SEND | ACTION_STALL)) {
+        switch(state) {
+        case STATE_ENUMERATE:
+            if (next_byte == ID_OFFSET + ID_SIZE) {
+                // Entire address sent
+                if (mute) {
+                    // Another device had a lower id, so try again
+                    // on the next round
+                    next_byte = 0;
+                    bus_addr++;
+                    state = STATE_ENUMERATE;
+                    mute = false;
+                } else {
+                    // We have the lowest id sent during this round,
+                    // so claim the current bus address and stop
+                    // paying attention
+                    state = STATE_IDLE;
+                    action = ACTION_IDLE;
+                    break;
+                }
+            }
+            /* FALLTHROUGH */
+        case STATE_READ_EEPROM_READ:
+            // Read and send next EEPROM byte
+            byte_buf = EEPROM_read(next_byte);
+            next_byte++;
+            next_bit = 1;
+            action = ACTION_SEND;
+            break;
+        }
+
+    }
+
+    cli();
+    // Only sleep if the main loop isn't supposed to do anything, to
+    // prevent deadlock. There's a magic dance here to make sure
+    // an interrupt does not set the ACTION_STALL bit after we
+    // checked for it but before entering sleep mode
+    if (!(action & ACTION_STALL)) {
+        // The instruction after sei is guaranteed to execute before
+        // any interrupts are triggered, so we can be sure the sleep
+        // mode is entered, with interrupts enabled, but before any
+        // interrupts fire (possibly leaving it again directly if an
+        // interrupt is pending).
+        sei();
+        sleep_cpu();
+    }
+    sei();
+}
+
+int main(void)
+{
+    setup();
+    while(true)
+        loop();
 }
 
 /* vim: set sw=4 sts=4 expandtab: */
