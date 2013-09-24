@@ -105,6 +105,10 @@ enum {
     TIMA_ACTION_CHECK_COLLISION = 8,
 };
 
+enum {
+    FLAG_MUTE = 1,
+};
+
 // Putting global variables in fixed registers saves a lot of
 // instructions for loading and storing their values to memory.
 // Additionally, if _all_ globals are in registers (or declared with
@@ -118,7 +122,7 @@ register uint8_t next_bit asm("r3");
 register uint8_t next_byte asm("r4");
 
 register uint8_t bus_addr asm("r5");
-register bool mute asm("r6");
+register uint8_t flags asm("r6");
 
 register uint8_t action asm("r7");
 register uint8_t state asm("r8");
@@ -167,7 +171,7 @@ ISR(INT0_vect)
     } else if (action & ACTION_RECEIVE) {
         timera_action = TIMA_ACTION_READ | TIMA_ACTION_NEXT_BIT;
     } else if (action & ACTION_SEND) {
-        if ((byte_buf & next_bit) == 0 && !mute) {
+        if ((byte_buf & next_bit) == 0 && (flags & FLAG_MUTE) == 0) {
             // Pull the line low
             // Let if float again after some time
             timera_action = TIMA_ACTION_RELEASE | TIMA_ACTION_NEXT_BIT;
@@ -207,7 +211,7 @@ ISR(TIM0_COMPB_vect)
         action = ACTION_RECEIVE;
         byte_buf = 0;
         next_bit = 1;
-        mute = false;
+        flags &= ~FLAG_MUTE;
     } else {
         set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 
@@ -235,7 +239,7 @@ ISR(TIM0_COMPA_vect)
             // line low. Check if the line is actually high. If not, someone
             // else is pulling the line low, so we drop out of the current
             // address sending round.
-            mute = true;
+            flags |= FLAG_MUTE;
         }
     }
 
@@ -300,7 +304,7 @@ void __attribute__((noinline)) loop(void);
 void setup(void)
 {
     bus_addr = 0xff;
-    mute = false;
+    flags &= ~FLAG_MUTE;
     action = ACTION_IDLE;
     state = STATE_IDLE;
     // Set ports to output for debug
@@ -404,12 +408,12 @@ void loop(void)
         case STATE_ENUMERATE:
             if (next_byte == ID_OFFSET + ID_SIZE) {
                 // Entire address sent
-                if (mute) {
+                if (flags & FLAG_MUTE) {
                     // Another device had a lower id, so try again
                     // on the next round
                     next_byte = 0;
                     bus_addr++;
-                    mute = false;
+                    flags &= ~FLAG_MUTE;
                 } else {
                     // We have the lowest id sent during this round,
                     // so claim the current bus address and stop
