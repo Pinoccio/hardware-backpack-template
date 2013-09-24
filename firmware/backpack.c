@@ -339,7 +339,7 @@ void loop(void)
                 bus_addr = 0;
             } else if (byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
-                action = ACTION_RECEIVE;
+                action = ACTION_RECEIVE | ACTION_READY;
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
@@ -353,14 +353,14 @@ void loop(void)
         case STATE_READ_COMMAND:
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
-                    action = ACTION_RECEIVE;
+                    action = ACTION_RECEIVE | ACTION_READY;
                     state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_ADDR;
-                    action = ACTION_RECEIVE;
+                    action = ACTION_RECEIVE | ACTION_READY;
                     byte_buf = 0;
                     next_bit = 1;
                     break;
@@ -381,7 +381,7 @@ void loop(void)
             next_byte = byte_buf;
             next_bit = 1;
             byte_buf = 0;
-            action = ACTION_RECEIVE;
+            action = ACTION_RECEIVE | ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
             break;
         case STATE_WRITE_EEPROM_WRITE:
@@ -394,7 +394,7 @@ void loop(void)
             next_byte++;
             next_bit = 1;
             byte_buf = 0;
-            action = ACTION_RECEIVE;
+            action = ACTION_RECEIVE | ACTION_READY;
             break;
         }
     }
@@ -425,7 +425,10 @@ void loop(void)
             byte_buf = EEPROM_read(next_byte);
             next_byte++;
             next_bit = 1;
-            action = ACTION_SEND;
+            if (state == STATE_ENUMERATE)
+                action = ACTION_SEND;
+            else
+                action = ACTION_SEND | ACTION_READY;
             break;
         }
 

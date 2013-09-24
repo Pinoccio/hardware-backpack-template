@@ -68,33 +68,51 @@ uint8_t bp_read_bit() {
     return value;
 }
 
-uint8_t bp_read_byte() {
+bool bp_read_ready() {
+    int timeout = 20;
+    while (timeout--) {
+        if (bp_read_bit() == LOW)
+            return true;
+    }
+    return false;
+}
+
+enum {
+    WAIT_READY = true,
+    DONT_WAIT_READY = false,
+};
+
+uint8_t bp_read_byte(bool ready = WAIT_READY) {
     uint8_t b = 0;
     uint8_t i = 8;
     while (i--) {
         b >>= 1;
         b |= (bp_read_bit() ? 0x80 : 0);
     }
+    if (ready)
+        bp_read_ready();
     return b;
 }
 
-void bp_write_byte(uint8_t b) {
+void bp_write_byte(uint8_t b, bool ready = WAIT_READY) {
     uint8_t i = 8;
     while (i--) {
         bp_write_bit(b & 1);
         b >>= 1;
     }
+    if (ready)
+        bp_read_ready();
 }
 
 void bp_scan() {
     bp_reset();
-    bp_write_byte(0xaa);
+    bp_write_byte(0xaa, DONT_WAIT_READY);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
     while (true) {
         for (uint8_t i = 0; i < sizeof(id); ++i) {
-            id[i] = bp_read_byte();
+            id[i] = bp_read_byte(DONT_WAIT_READY);
             //delayMicroseconds(ADDRESS_BYTE_DELAY);
         }
 
