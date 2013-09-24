@@ -409,7 +409,6 @@ void loop(void)
                     // on the next round
                     next_byte = 0;
                     bus_addr++;
-                    state = STATE_ENUMERATE;
                     mute = false;
                 } else {
                     // We have the lowest id sent during this round,
