@@ -50,14 +50,6 @@ void bp_write_bit(uint8_t bit) {
     delayMicroseconds(IDLE_DELAY);
 }
 
-void bp_write_byte(uint8_t b) {
-    uint8_t i = 8;
-    while (i--) {
-        bp_write_bit(b & 1);
-        b >>= 1;
-    }
-}
-
 uint8_t bp_read_bit() {
     uint8_t value;
     pinMode(BP_BUS_PIN, OUTPUT);
@@ -84,6 +76,14 @@ uint8_t bp_read_byte() {
         b |= (bp_read_bit() ? 0x80 : 0);
     }
     return b;
+}
+
+void bp_write_byte(uint8_t b) {
+    uint8_t i = 8;
+    while (i--) {
+        bp_write_bit(b & 1);
+        b >>= 1;
+    }
 }
 
 void bp_scan() {
