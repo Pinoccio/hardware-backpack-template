@@ -74,7 +74,7 @@ enum {
     ACTION_RECEIVE = 1,
     ACTION_SEND = 2,
     ACTION_STALL = 4,
-    ACTION_ACK = 8,
+    ACTION_READY = 8,
 };
 
 // Constants for the current state for the high level protocol handler
@@ -157,11 +157,11 @@ ISR(INT0_vect)
     set_sleep_mode(SLEEP_MODE_IDLE);
 
     timera_action = TIMA_ACTION_NONE;
-    if (action & ACTION_ACK) {
+    if (action & ACTION_READY) {
         // Pull the line low
         // Let if float again after some time
         timera_action = TIMA_ACTION_RELEASE;
-        action &= ~ACTION_ACK;
+        action &= ~ACTION_READY;
     } else if (action & ACTION_STALL) {
         ;
     } else if (action & ACTION_RECEIVE) {
