@@ -151,6 +151,7 @@ ISR(INT0_vect)
         DDRB |= (1 << PINB1);
         // Let if float again after some time
         OCR0A = DATA_WRITE;
+        TIMSK0 |=  (1 << OCIE0A);
     } else if (action & ACTION_STALL) {
         ;
     } else if (action & ACTION_RECEIVE) {
@@ -201,6 +202,8 @@ ISR(TIM0_COMPA_vect)
     if (action & ACTION_ACK) {
         // Timer means end of period, we should stop pulling the line low
         DDRB &= ~(1 << PINB1);
+        // Ack is sent, start the real data
+        action &= ~ACTION_ACK;
     } else if (action & ACTION_RECEIVE) {
         // Read and store bit value
         if (val)
