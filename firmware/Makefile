@@ -22,6 +22,9 @@ dump: backpack.elf
 size: backpack.elf
 	avr-size -C $<
 
+read_eeprom:
+	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U eeprom:r:-:h
+
 # Output assembly with addresses removed for easy diffing
 diffdump: backpack.elf
 	avr-objdump -D $< | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
