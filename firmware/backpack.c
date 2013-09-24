@@ -168,10 +168,13 @@ ISR(INT0_vect)
         action &= ~ACTION_READY;
     } else if (action & ACTION_STALL) {
         ;
+    } else if (flags & FLAG_MUTE) {
+        // We're muted, so only count bits
+        timera_action = TIMA_ACTION_NEXT_BIT;
     } else if (action & ACTION_RECEIVE) {
         timera_action = TIMA_ACTION_READ | TIMA_ACTION_NEXT_BIT;
     } else if (action & ACTION_SEND) {
-        if ((byte_buf & next_bit) == 0 && (flags & FLAG_MUTE) == 0) {
+        if ((byte_buf & next_bit) == 0) {
             // Pull the line low
             // Let if float again after some time
             timera_action = TIMA_ACTION_RELEASE | TIMA_ACTION_NEXT_BIT;
