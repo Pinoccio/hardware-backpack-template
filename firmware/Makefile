@@ -5,14 +5,23 @@ AVRDUDE_PART=t13
 
 -include Makefile.local
 
-all:
-	avr-gcc -mmcu=$(GCC_MCU) -Os backpack.c -o backpack.elf -fwhole-program
-	avr-objcopy -O ihex backpack.elf backpack.hex
-	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -U flash:w:backpack.hex
+all: upload
 
-dump:
-	avr-objdump -D backpack.elf | less
+backpack.elf: backpack.c
+	avr-gcc -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
+
+backpack.hex: backpack.elf
+	avr-objcopy -O ihex $< $@
+
+upload: backpack.hex
+	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -U flash:w:$<
+
+dump: backpack.elf
+	avr-objdump -D $< | less
+
+size: backpack.elf
+	avr-size -C $<
 
 # Output assembly with addresses removed for easy diffing
-diffdump:
-	avr-objdump -D backpack.elf | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
+diffdump: backpack.elf
+	avr-objdump -D $< | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
