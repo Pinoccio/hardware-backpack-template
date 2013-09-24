@@ -97,15 +97,23 @@ enum {
     STATE_WRITE_EEPROM_WRITE,
 };
 
-uint8_t byte_buf;
-uint8_t next_bit;
-uint8_t next_byte;
+// Putting global variables in fixed registers saves a lot of
+// instructions for loading and storing their values to memory.
+// Additionally, if _all_ globals are in registers (or declared with
+// __attribute__ ((section (".noinit")))), gcc will omit the bss clear
+// loop (saving another 16 bytes). Only call-used registers are
+// available, so that's effectively r2-r17. Using all of those will
+// probably kill the compiler, though.
 
-uint8_t bus_addr;
-bool mute;
+register uint8_t byte_buf asm("r2");
+register uint8_t next_bit asm("r3");
+register uint8_t next_byte asm("r4");
 
-volatile uint8_t action; //state
-volatile uint8_t state; //state
+register uint8_t bus_addr asm("r5");
+register bool mute asm("r6");
+
+register uint8_t action asm("r7");
+register uint8_t state asm("r8");
 
 // Note that the falling edge interrupt is _always_ enabled, so if a
 // falling edge occurs before the previous bit period is processed (e.g.
@@ -255,6 +263,18 @@ uint8_t EEPROM_read(uint8_t ucAddress)
     /* Return data from data register */
     return EEDR;
 }
+
+#if (__GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 8))
+// On GCC < 4.8, there is a bug that can cause writes to global register
+// variables be dropped in a function that never returns (e.g., main).
+// To prevent triggering this bug, don't inline the setup and loop
+// functions, which could cause such writes to show up in main. This
+// adds a few bytes of useless program code, but that pales in
+// comparison with the bytes saved by using global register variables.
+// http://gcc.gnu.org/bugzilla/show_bug.cgi?id=51447
+void __attribute__((noinline)) setup(void);
+void __attribute__((noinline)) loop(void);
+#endif
 
 void setup(void)
 {
