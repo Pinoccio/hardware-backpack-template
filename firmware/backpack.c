@@ -49,33 +49,26 @@ uint8_t const ID_SIZE = 4;
 // Size of the unique ID
 uint8_t const ID_OFFSET = 0;
 
-uint8_t bus_addr = 0xff;
-bool mute = false;
-
-// Broadcast discover command
-enum {
-    BC_CMD_DISCOVER = 0xaa,
-};
-
-// Read EEPROM command
-enum {
-    CMD_READ_EEPROM = 0x01,
-    CMD_WRITE_EEPROM = 0x02,
-};
-
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
 #define RESET_SAMPLE US_TO_CLOCKS(1800)
 //#define START_DELAY US_TO_CLOCKS(32)
 #define DATA_WRITE US_TO_CLOCKS(900)
 #define DATA_SAMPLE US_TO_CLOCKS(450)
 
-uint8_t byte_buf;
-uint8_t next_bit;
-uint8_t next_byte;
+// Broadcast commands (i.e., special addresses sent over the wire)
+enum {
+    // Start bus enumeration
+    BC_CMD_ENUMERATE = 0xaa,
+};
 
-volatile uint8_t action; //state
-volatile uint8_t state; //state
+// Targeted commands (i.e,. sent over the wire after the address)
+enum {
+    CMD_READ_EEPROM = 0x01,
+    CMD_WRITE_EEPROM = 0x02,
+};
 
+// Constants for the current action the low level protocol handler
+// Some of these can be combined.
 enum {
     ACTION_IDLE = 0,
     ACTION_RECEIVE = 1,
@@ -84,10 +77,15 @@ enum {
     ACTION_ACK = 8,
 };
 
+// Constants for the current state for the high level protocol handler
 enum {
+    // Idle - Waiting for the next reset to participate (again)
     STATE_IDLE,
+    // Bus was reset, reading the address byte (or broadcast command)
     STATE_READ_ADDRESS,
-    STATE_SEND_UNIQUE_ID,
+    // BC_CMD_ENUMERATE received, bus enumeration in progress
+    STATE_ENUMERATE,
+    // We are adressed, receiving targeted command
     STATE_READ_COMMAND,
     // CMD_READ_EEPROM received, now receiving read address
     STATE_READ_EEPROM_ADDR,
@@ -98,6 +96,16 @@ enum {
     // CMD_WRITE_EEPROM and write address received, now writing
     STATE_WRITE_EEPROM_WRITE,
 };
+
+uint8_t byte_buf;
+uint8_t next_bit;
+uint8_t next_byte;
+
+uint8_t bus_addr = 0xff;
+bool mute = false;
+
+volatile uint8_t action; //state
+volatile uint8_t state; //state
 
 // Note that the falling edge interrupt is _always_ enabled, so if a
 // falling edge occurs before the previous bit period is processed (e.g.
@@ -278,8 +286,8 @@ int main(void)
             // Done receiving a byte
             switch(state) {
             case STATE_READ_ADDRESS:
-                if (byte_buf == BC_CMD_DISCOVER) {
-                    state = STATE_SEND_UNIQUE_ID;
+                if (byte_buf == BC_CMD_ENUMERATE) {
+                    state = STATE_ENUMERATE;
                     action = ACTION_SEND | ACTION_STALL;
                     next_byte = ID_OFFSET;
                     bus_addr = 0;
@@ -347,7 +355,7 @@ int main(void)
 
         if (action == (ACTION_SEND | ACTION_STALL)) {
             switch(state) {
-            case STATE_SEND_UNIQUE_ID:
+            case STATE_ENUMERATE:
                 if (next_byte == ID_OFFSET + ID_SIZE) {
                     // Entire address sent
                     if (mute) {
@@ -355,7 +363,7 @@ int main(void)
                         // on the next round
                         next_byte = 0;
                         bus_addr++;
-                        state = STATE_SEND_UNIQUE_ID;
+                        state = STATE_ENUMERATE;
                         mute = false;
                     } else {
                         // We have the lowest id sent during this round,
