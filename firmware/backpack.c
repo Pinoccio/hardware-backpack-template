@@ -171,18 +171,29 @@ ISR(INT0_vect)
             // Pull the line low
             // Let if float again after some time
             timera_action = TIMA_ACTION_RELEASE | TIMA_ACTION_NEXT_BIT;
-        } else {
+        } else if (state == STATE_ENUMERATE) {
             // Check for address collisions
             timera_action = TIMA_ACTION_CHECK_COLLISION | TIMA_ACTION_NEXT_BIT;
+        } else {
+            timera_action = TIMA_ACTION_NEXT_BIT;
         }
     }
-    OCR0A = DATA_SAMPLE;
-    if (timera_action & TIMA_ACTION_RELEASE) {
-        OCR0A = DATA_WRITE;
-        DDRB |= (1 << PINB1);
-    }
-    if (timera_action)
+
+    if (timera_action == TIMA_ACTION_NEXT_BIT) {
+        next_bit <<= 1;
+
+        // Full byte received? Stall while main loop to process
+        if (!next_bit)
+            action |= ACTION_STALL;
+    } else if (timera_action) {
         TIMSK0 |=  (1 << OCIE0A);
+        OCR0A = DATA_SAMPLE;
+
+        if (timera_action & TIMA_ACTION_RELEASE) {
+            OCR0A = DATA_WRITE;
+            DDRB |= (1 << PINB1);
+        }
+    }
 }
 
 
