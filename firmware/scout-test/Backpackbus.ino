@@ -24,12 +24,11 @@
 
 #define BP_BUS_PIN 2
 
-#define RESET_DELAY 3000
+#define RESET_DELAY 2000
 #define START_DELAY 200
-#define VALUE_DELAY 700
-#define SAMPLE_DELAY 350
-#define IDLE_DELAY 300
-#define ADDRESS_BYTE_DELAY 500
+#define VALUE_DELAY 450
+#define SAMPLE_DELAY 150
+#define IDLE_DELAY 200
 
 void bp_reset() {
     pinMode(BP_BUS_PIN, OUTPUT);
@@ -136,7 +135,6 @@ void bp_scan() {
     while (true) {
         for (uint8_t i = 0; i < sizeof(id); ++i) {
             id[i] = bp_read_byte(DONT_WAIT_READY | NO_PARITY);
-            //delayMicroseconds(ADDRESS_BYTE_DELAY);
         }
 
         if (id[0] == 0xff && id[1] == 0xff && id[2] == 0xff && id[3] == 0xff) {

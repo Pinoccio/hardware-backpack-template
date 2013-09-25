@@ -54,10 +54,10 @@ uint8_t const ID_SIZE = 4;
 uint8_t const ID_OFFSET = 0;
 
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
-#define RESET_SAMPLE US_TO_CLOCKS(1800)
+#define RESET_SAMPLE US_TO_CLOCKS(1400)
 //#define START_DELAY US_TO_CLOCKS(32)
-#define DATA_WRITE US_TO_CLOCKS(900)
-#define DATA_SAMPLE US_TO_CLOCKS(450)
+#define DATA_WRITE US_TO_CLOCKS(600)
+#define DATA_SAMPLE US_TO_CLOCKS(300)
 
 // Broadcast commands (i.e., special addresses sent over the wire)
 enum {
