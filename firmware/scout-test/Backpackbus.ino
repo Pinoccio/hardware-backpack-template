@@ -74,45 +74,68 @@ bool bp_read_ready() {
         if (bp_read_bit() == LOW)
             return true;
     }
+    Serial.println("Stall timeout");
     return false;
 }
 
 enum {
-    WAIT_READY = true,
-    DONT_WAIT_READY = false,
+    DONT_WAIT_READY = 1,
+    NO_PARITY = 2,
 };
 
-uint8_t bp_read_byte(bool ready = WAIT_READY) {
+int bp_read_byte(uint8_t flags = 0) {
     uint8_t b = 0;
     uint8_t i = 8;
+    bool parity_val = 1;
     while (i--) {
         b >>= 1;
         b |= (bp_read_bit() ? 0x80 : 0);
+        if (b & 0x80)
+            parity_val ^= 1;
     }
-    if (ready)
-        bp_read_ready();
+    if (!(flags & NO_PARITY)) {
+        if (bp_read_bit() != parity_val) {
+            Serial.println("Parity error");
+            return -1;
+        }
+    }
+    if (!(flags & DONT_WAIT_READY)) {
+        if (!bp_read_ready())
+            return -1;
+    }
+
     return b;
 }
 
-void bp_write_byte(uint8_t b, bool ready = WAIT_READY) {
+bool bp_write_byte(uint8_t b, uint8_t flags = 0){
     uint8_t i = 8;
+    bool parity_val= 1;
     while (i--) {
+        parity_val ^= (b & 1);
         bp_write_bit(b & 1);
         b >>= 1;
     }
-    if (ready)
-        bp_read_ready();
+    if (!(flags & NO_PARITY)) {
+        bp_write_bit(parity_val);
+        if (bp_read_bit() == HIGH) {
+            Serial.println("NAK received");
+            return false;
+        }
+    }
+    if (!(flags & DONT_WAIT_READY))
+        return bp_read_ready();
+    return true;
 }
 
 void bp_scan() {
     bp_reset();
-    bp_write_byte(0xaa, DONT_WAIT_READY);
+    bp_write_byte(0xaa, DONT_WAIT_READY | NO_PARITY);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
     while (true) {
         for (uint8_t i = 0; i < sizeof(id); ++i) {
-            id[i] = bp_read_byte(DONT_WAIT_READY);
+            id[i] = bp_read_byte(DONT_WAIT_READY | NO_PARITY);
             //delayMicroseconds(ADDRESS_BYTE_DELAY);
         }
 
@@ -127,24 +150,34 @@ void bp_scan() {
     }
 }
 
-void bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
-    bp_write_byte(addr);
+    if (!bp_write_byte(addr, NO_PARITY)) {
+        Serial << "Device " << V<Hex>(addr) << " not on the bus?" << endl;
+        return false;
+    }
+    // TODO: Check result of these calls
     bp_write_byte(0x01);
     bp_write_byte(offset);
     while (len--)
         *buf++ = bp_read_byte();
+    return true;
 }
 
-void bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
-    bp_write_byte(addr);
+    if (!bp_write_byte(addr, NO_PARITY)) {
+        Serial << "Device " << V<Hex>(addr) << " not on the bus?" << endl;
+        return false;
+    }
+    // TODO: Check result of these calls
     bp_write_byte(0x02);
     bp_write_byte(offset);
     while (len--) {
         Serial << V<Hex>(*buf);
         bp_write_byte(*buf++);
     }
+    return true;
 }
 
 
@@ -158,7 +191,8 @@ uint8_t eeprom_written = false;
 
 
 void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
-    bp_read_eeprom(addr, offset, buf, len);
+    if (!bp_read_eeprom(addr, offset, buf, len))
+        return;
     Serial << "Device " << V<Hex>(addr) << ": ";
     while (len--)
         Serial << V<Hex>(*buf++);

@@ -75,6 +75,8 @@ enum {
     ACTION_SEND = 2,
     ACTION_STALL = 4,
     ACTION_READY = 8,
+    ACTION_PARITY = 16,
+    ACTION_ACK = 32,
 };
 
 // Constants for the current state for the high level protocol handler
@@ -103,10 +105,15 @@ enum {
     TIMA_ACTION_NEXT_BIT = 2,
     TIMA_ACTION_READ = 4,
     TIMA_ACTION_CHECK_COLLISION = 8,
+    TIMA_ACTION_CHECK_PARITY = 16,
 };
 
 enum {
     FLAG_MUTE = 1,
+    // The (odd) parity bit for all bits sent or received so far
+    FLAG_PARITY = 2,
+    // Does the current byte need parity?
+    FLAG_USE_PARITY = 4,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -166,13 +173,25 @@ ISR(INT0_vect)
         // Let if float again after some time
         timera_action = TIMA_ACTION_RELEASE;
         action &= ~ACTION_READY;
+    } else if (action & ACTION_ACK) {
+        timera_action = TIMA_ACTION_RELEASE;
+        action &= ~ACTION_ACK;
+        action |= ACTION_STALL;
     } else if (action & ACTION_STALL) {
         ;
     } else if (flags & FLAG_MUTE) {
         // We're muted, so only count bits
         timera_action = TIMA_ACTION_NEXT_BIT;
+    } else if (action == (ACTION_RECEIVE | ACTION_PARITY)) {
+        timera_action = TIMA_ACTION_CHECK_PARITY;
+        action &= ~ACTION_PARITY;
     } else if (action & ACTION_RECEIVE) {
         timera_action = TIMA_ACTION_READ | TIMA_ACTION_NEXT_BIT;
+    } else if (action == (ACTION_SEND | ACTION_PARITY)) {
+        action &= ~ACTION_PARITY;
+        action |= ACTION_STALL;
+        if ((flags & FLAG_PARITY) == 0)
+            timera_action = TIMA_ACTION_RELEASE;
     } else if (action & ACTION_SEND) {
         if ((byte_buf & next_bit) == 0) {
             // Pull the line low
@@ -183,6 +202,7 @@ ISR(INT0_vect)
             timera_action = TIMA_ACTION_CHECK_COLLISION | TIMA_ACTION_NEXT_BIT;
         } else {
             timera_action = TIMA_ACTION_NEXT_BIT;
+            flags ^= FLAG_PARITY;
         }
     }
 
@@ -190,8 +210,12 @@ ISR(INT0_vect)
         next_bit <<= 1;
 
         // Full byte received? Stall while main loop to process
-        if (!next_bit)
-            action |= ACTION_STALL;
+        if (!next_bit) {
+            if (flags & FLAG_USE_PARITY)
+                action |= ACTION_PARITY;
+            else
+                action |= ACTION_STALL;
+        }
     } else if (timera_action) {
         TIMSK0 |=  (1 << OCIE0A);
         OCR0A = DATA_SAMPLE;
@@ -214,6 +238,7 @@ ISR(TIM0_COMPB_vect)
         action = ACTION_RECEIVE;
         byte_buf = 0;
         next_bit = 1;
+        flags &= ~FLAG_USE_PARITY;
         flags &= ~FLAG_MUTE;
     } else {
         set_sleep_mode(SLEEP_MODE_PWR_DOWN);
@@ -249,16 +274,35 @@ ISR(TIM0_COMPA_vect)
 
     if (timera_action & TIMA_ACTION_READ) {
         // Read and store bit value
-        if (val)
+        if (val) {
             byte_buf |= next_bit;
+            flags ^= FLAG_PARITY;
+        }
+    }
+
+    if (timera_action & TIMA_ACTION_CHECK_PARITY) {
+        uint8_t parity = (flags & FLAG_PARITY);
+        if ((val != 0 && parity != 0) || (val == 0 && parity == 0)) {
+            action |= ACTION_ACK;
+            pulse(PINB2);
+        } else {
+            // Drop off the bus, which will implicitly send a NAC (high)
+            // bit.
+            action |= ACTION_IDLE;
+            pulse(PINB0);
+        }
     }
 
     if (timera_action & TIMA_ACTION_NEXT_BIT) {
         next_bit <<= 1;
 
         // Full byte received? Stall while main loop to process
-        if (!next_bit)
-            action |= ACTION_STALL;
+        if (!next_bit) {
+            if (flags & FLAG_USE_PARITY)
+                action |= ACTION_PARITY;
+            else
+                action |= ACTION_STALL;
+        }
     }
 
     // Disable this timer interrupt
@@ -350,7 +394,10 @@ void loop(void)
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
-                pulse(PINB0);
+                // Enable parity for every byte after this one
+                flags |= FLAG_USE_PARITY;
+                // Odd parity over zero bits is 1
+                flags |= FLAG_PARITY;
             } else {
                 // We're not addressed, stop paying attention
                 action = ACTION_IDLE;
@@ -364,12 +411,16 @@ void loop(void)
                     state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
+                    // Odd parity over zero bits is 1
+                    flags |= FLAG_PARITY;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_ADDR;
                     action = ACTION_RECEIVE | ACTION_READY;
                     byte_buf = 0;
                     next_bit = 1;
+                    // Odd parity over zero bits is 1
+                    flags |= FLAG_PARITY;
                     break;
                 default:
                     // Unknown command
@@ -381,6 +432,8 @@ void loop(void)
         case STATE_READ_EEPROM_ADDR:
             next_byte = byte_buf;
             next_bit = 1;
+            // Odd parity over zero bits is 1
+            flags |= FLAG_PARITY;
             action = ACTION_SEND | ACTION_STALL;
             state = STATE_READ_EEPROM_READ;
             break;
@@ -388,6 +441,8 @@ void loop(void)
             next_byte = byte_buf;
             next_bit = 1;
             byte_buf = 0;
+            // Odd parity over zero bits is 1
+            flags |= FLAG_PARITY;
             action = ACTION_RECEIVE | ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
             break;
@@ -401,6 +456,8 @@ void loop(void)
             next_byte++;
             next_bit = 1;
             byte_buf = 0;
+            // Odd parity over zero bits is 1
+            flags |= FLAG_PARITY;
             action = ACTION_RECEIVE | ACTION_READY;
             break;
         }
@@ -432,6 +489,8 @@ void loop(void)
             byte_buf = EEPROM_read(next_byte);
             next_byte++;
             next_bit = 1;
+            // Odd parity over zero bits is 1
+            flags |= FLAG_PARITY;
             if (state == STATE_ENUMERATE)
                 action = ACTION_SEND;
             else
