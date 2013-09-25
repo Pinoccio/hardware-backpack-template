@@ -11,7 +11,7 @@ backpack.S: backpack.c Makefile
 	avr-gcc -Wall -S -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
 
 backpack.elf: backpack.c Makefile
-	avr-gcc -Wall -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
+	avr-gcc -g -Wall -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
 
 backpack.hex: backpack.elf
 	avr-objcopy -O ihex $< $@
@@ -20,7 +20,7 @@ upload: backpack.hex
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -U flash:w:$<
 
 dump: backpack.elf
-	avr-objdump -D $< | less
+	avr-objdump -S $< | less
 
 size: backpack.elf
 	avr-size -C $<
@@ -30,4 +30,4 @@ read_eeprom:
 
 # Output assembly with addresses removed for easy diffing
 diffdump: backpack.elf
-	avr-objdump -D $< | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
+	avr-objdump -S $< | sed 's/^ *[0-9a-f]*//' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq)\s*).*/...\t\t\2.../'
