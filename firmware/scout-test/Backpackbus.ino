@@ -139,7 +139,7 @@ void bp_scan() {
             // No device replied, we found them all
             break;
         }
-        Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(": ");
+        Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(" found with id: ");
         for (uint8_t i = 0; i < sizeof(id); ++i) {
             if (id[i] < 0x10) Serial.print("0");
             Serial.print(id[i], HEX);
@@ -175,7 +175,6 @@ bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_write_byte(0x02);
     bp_write_byte(offset);
     while (len--) {
-        Serial.print(*buf, HEX);
         bp_write_byte(*buf++);
     }
     return true;
@@ -194,7 +193,7 @@ uint8_t eeprom_written = false;
 void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     if (!bp_read_eeprom(addr, offset, buf, len))
         return;
-    Serial.print("Device "); Serial.print(addr, HEX); Serial.print(": ");
+    Serial.print("Device "); Serial.print(addr, HEX); Serial.print(" EEPROM: ");
     while (len--) {
         if (*buf < 0x10) Serial.print("0");
         Serial.print(*buf++, HEX);
@@ -210,16 +209,21 @@ void loop() {
     digitalWrite(3, LOW);
     bp_scan();
     delay(100);
-    Serial.println("Reading EEPROM...");
-    print_eeprom(0x00, 0, buf, sizeof(buf));
     if (!eeprom_written) {
-        delay(100);
-        Serial.println("Incrementing...");
-        for (size_t i = 0; i < sizeof(buf); ++i)
+        print_eeprom(0x00, 0, buf, sizeof(buf));
+        Serial.print("Incrementing all EEPROM bytes of device 0: ");
+        for (size_t i = 0; i < sizeof(buf); ++i) {
             buf[i]++;
+            if (buf[i] < 0x10) Serial.print("0");
+            Serial.print(buf[i], HEX);
+        }
+        Serial.println();
         bp_write_eeprom(0x00, 0, buf, sizeof(buf));
         eeprom_written = true;
+        delay(100);
     }
+    Serial.println("Reading EEPROM...");
+    print_eeprom(0x00, 0, buf, sizeof(buf));
     delay(100);
     print_eeprom(0x01, 0, buf, sizeof(buf));
 }
