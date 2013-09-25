@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <TStreaming.h>
-
 #define BP_BUS_PIN 2
 
 #define RESET_DELAY 2000
@@ -141,8 +139,13 @@ void bp_scan() {
             // No device replied, we found them all
             break;
         }
-        Serial << "Device " << V<Hex>(next_addr) << ": ";
-        Serial << V<Array<Hex, TNullStr>>(id, sizeof(id)) << endl;
+        Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(": ");
+        for (uint8_t i = 0; i < sizeof(id); ++i) {
+            if (id[i] < 0x10) Serial.print("0");
+            Serial.print(id[i], HEX);
+        }
+        Serial.println();
+
         if (next_addr++ == 4)
             break;
     }
@@ -151,7 +154,7 @@ void bp_scan() {
 bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
     if (!bp_write_byte(addr, NO_PARITY)) {
-        Serial << "Device " << V<Hex>(addr) << " not on the bus?" << endl;
+        Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" not on the bus?");
         return false;
     }
     // TODO: Check result of these calls
@@ -165,14 +168,14 @@ bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bp_reset();
     if (!bp_write_byte(addr, NO_PARITY)) {
-        Serial << "Device " << V<Hex>(addr) << " not on the bus?" << endl;
+        Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" not on the bus?");
         return false;
     }
     // TODO: Check result of these calls
     bp_write_byte(0x02);
     bp_write_byte(offset);
     while (len--) {
-        Serial << V<Hex>(*buf);
+        Serial.print(*buf, HEX);
         bp_write_byte(*buf++);
     }
     return true;
@@ -191,25 +194,27 @@ uint8_t eeprom_written = false;
 void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     if (!bp_read_eeprom(addr, offset, buf, len))
         return;
-    Serial << "Device " << V<Hex>(addr) << ": ";
-    while (len--)
-        Serial << V<Hex>(*buf++);
-    Serial << endl;
+    Serial.print("Device "); Serial.print(addr, HEX); Serial.print(": ");
+    while (len--) {
+        if (*buf < 0x10) Serial.print("0");
+        Serial.print(*buf++, HEX);
+    }
+    Serial.println();
 }
 
 void loop() {
     uint8_t buf[16];
     delay(1000);
-    Serial << "Scanning..." << endl;
+    Serial.println("Scanning...");
     digitalWrite(3, HIGH);
     digitalWrite(3, LOW);
     bp_scan();
     delay(100);
-    Serial << "Reading EEPROM..." << endl;
+    Serial.println("Reading EEPROM...");
     print_eeprom(0x00, 0, buf, sizeof(buf));
     if (!eeprom_written) {
         delay(100);
-        Serial << "Incrementing..." << endl;
+        Serial.println("Incrementing...");
         for (size_t i = 0; i < sizeof(buf); ++i)
             buf[i]++;
         bp_write_eeprom(0x00, 0, buf, sizeof(buf));
