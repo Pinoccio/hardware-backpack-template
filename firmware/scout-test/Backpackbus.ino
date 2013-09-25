@@ -203,11 +203,11 @@ void loop() {
     uint8_t buf[16];
     delay(1000);
     Serial << "Scanning..." << endl;
+    digitalWrite(3, HIGH);
+    digitalWrite(3, LOW);
     bp_scan();
     delay(100);
     Serial << "Reading EEPROM..." << endl;
-    digitalWrite(3, HIGH);
-    digitalWrite(3, LOW);
     print_eeprom(0x00, 0, buf, sizeof(buf));
     if (!eeprom_written) {
         delay(100);

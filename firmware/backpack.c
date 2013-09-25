@@ -227,31 +227,6 @@ ISR(INT0_vect)
     }
 }
 
-
-ISR(TIM0_COMPB_vect)
-{
-    uint8_t val = PINB & (1 << PINB1);
-    if (!val) {
-        // Bus is still low, this is a reset pulse (regardless of what
-        // state we were in previously!)
-        state = STATE_READ_ADDRESS;
-        action = ACTION_RECEIVE;
-        byte_buf = 0;
-        next_bit = 1;
-        flags &= ~FLAG_USE_PARITY;
-        flags &= ~FLAG_MUTE;
-    } else {
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-
-        // Make INT0 low-level triggered (note that this assumes ISC00
-        // is not set)
-        MCUCR &= ~(1<<ISC01);
-    }
-
-    // Disable this timer interrupt
-    TIMSK0 &= ~(1 << OCIE0B);
-}
-
 ISR(TIM0_COMPA_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
@@ -307,6 +282,30 @@ ISR(TIM0_COMPA_vect)
 
     // Disable this timer interrupt
     TIMSK0 &= ~(1 << OCIE0A);
+}
+
+ISR(TIM0_COMPB_vect)
+{
+    uint8_t val = PINB & (1 << PINB1);
+    if (!val) {
+        // Bus is still low, this is a reset pulse (regardless of what
+        // state we were in previously!)
+        state = STATE_READ_ADDRESS;
+        action = ACTION_RECEIVE;
+        byte_buf = 0;
+        next_bit = 1;
+        flags &= ~FLAG_USE_PARITY;
+        flags &= ~FLAG_MUTE;
+    } else {
+        set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
+        // Make INT0 low-level triggered (note that this assumes ISC00
+        // is not set)
+        MCUCR &= ~(1<<ISC01);
+    }
+
+    // Disable this timer interrupt
+    TIMSK0 &= ~(1 << OCIE0B);
 }
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
