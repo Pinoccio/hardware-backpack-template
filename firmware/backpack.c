@@ -44,6 +44,9 @@
     _NOP(); _NOP(); _NOP(); \
     PORTB |= (1 << pin);
 
+// Helper macro
+#define EXPAND_AND_STRINGIFY(x) __STRINGIFY(x)
+
 // Offset of the unique ID within the EEPROM
 uint8_t const ID_SIZE = 4;
 // Size of the unique ID
@@ -207,15 +210,24 @@ ISR(INT0_vect)
     }
 
     if (timera_action == TIMA_ACTION_NEXT_BIT) {
-        next_bit <<= 1;
-
-        // Full byte received? Stall while main loop to process
-        if (!next_bit) {
-            if (flags & FLAG_USE_PARITY)
-                action |= ACTION_PARITY;
-            else
-                action |= ACTION_STALL;
-        }
+        // If the only thing that needs to happen in the timer handler
+        // is advancing to the next bit, we might as well do it right
+        // away. We don't want duplicate code, so we pretend the
+        // timer interrupt happens directly.
+        // We use an assembly call here, because when the compiler sees
+        // a regular call, this causes this ISR (the caller) to save
+        // _all_ call-clobbered registers, in case the called function
+        // might actually clobber them. In this case, this is completely
+        // bogus, since we're calling a signal handler which will save
+        // everything it touches already (which also means that hiding
+        // this function call from the compiler is safe).
+        // Note that the obvious alternative (having a do_next_bit()
+        // function and call it from both signal handlers has the same
+        // problem. We could declare it as a signal handler and do the
+        // same trick with an asm call, but that still causes quite some
+        // overhead because the function will unconditionally save r0,
+        // r1 and the status register, even when it doesn't change it.
+        asm("rcall " EXPAND_AND_STRINGIFY(TIM0_COMPA_vect));
     } else if (timera_action) {
         TIMSK0 |=  (1 << OCIE0A);
         OCR0A = DATA_SAMPLE;
