@@ -435,8 +435,8 @@ void setup(void)
 
 void loop(void)
 {
-    if (action == (ACTION_RECEIVE | ACTION_STALL)) {
-        // Done receiving a byte
+    if (action & ACTION_STALL) {
+        // Done receiving or sending a byte
         switch(state) {
         case STATE_READ_ADDRESS:
             if (byte_buf == BC_CMD_ENUMERATE) {
@@ -516,11 +516,6 @@ void loop(void)
             flags |= FLAG_PARITY;
             action = ACTION_RECEIVE | ACTION_READY;
             break;
-        }
-    }
-
-    if (action == (ACTION_SEND | ACTION_STALL)) {
-        switch(state) {
         case STATE_ENUMERATE:
             if (next_byte == ID_OFFSET + ID_SIZE) {
                 // Entire address sent
