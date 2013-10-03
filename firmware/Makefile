@@ -2,16 +2,17 @@ SERIAL=/dev/ttyUSB0
 PROGRAMMER=stk500
 GCC_MCU=attiny13
 AVRDUDE_PART=t13
+CFLAGS=-Wall -mmcu=$(GCC_MCU) -Os
 
 -include Makefile.local
 
 all: upload
 
 backpack.S: backpack.c Makefile
-	avr-gcc -Wall -S -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
+	avr-gcc -S $(CFLAGS) $< -o $@ -fwhole-program
 
 backpack.elf: backpack.c Makefile
-	avr-gcc -g -Wall -mmcu=$(GCC_MCU) -Os $< -o $@ -fwhole-program
+	avr-gcc -g $(CFLAGS) $< -o $@ -fwhole-program
 
 backpack.hex: backpack.elf
 	avr-objcopy -O ihex $< $@
