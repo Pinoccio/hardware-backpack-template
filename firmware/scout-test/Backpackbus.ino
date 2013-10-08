@@ -68,7 +68,7 @@ uint8_t bp_read_bit() {
 bool bp_read_ready() {
     int timeout = 20;
     while (timeout--) {
-        if (bp_read_bit() == LOW)
+        if (bp_read_bit() != LOW)
             return true;
     }
     Serial.println("Stall timeout");
@@ -126,13 +126,13 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
 bool bp_scan() {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(0xaa, DONT_WAIT_READY | NO_PARITY);
+    ok = ok && bp_write_byte(0xaa, NO_PARITY);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
-            ok = bp_read_byte(&id[i], DONT_WAIT_READY | NO_PARITY);
+            ok = bp_read_byte(&id[i], NO_PARITY);
         }
 
         if (!ok)

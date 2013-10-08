@@ -99,7 +99,7 @@ enum {
     // action flags). The action global variable is always set to one of
     // these values.
     ACTION_IDLE = AV_IDLE,
-    ACTION_STALL = AV_STALL,
+    ACTION_STALL = AV_STALL | AF_LINE_LOW,
     ACTION_SEND = AV_SEND,
     ACTION_SEND_HIGH = AV_SEND,
     ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW,
@@ -112,7 +112,7 @@ enum {
     ACTION_NACK_HIGH = AV_SEND_NACK,
     ACTION_SEND_PARITY_HIGH = AV_SEND_PARITY,
     ACTION_SEND_PARITY_LOW = AV_SEND_PARITY | AF_LINE_LOW,
-    ACTION_READY = AV_READY,
+    ACTION_READY = AV_READY | AF_SAMPLE,
 };
 
 // Constants for the current state for the high level protocol handler
@@ -360,6 +360,12 @@ ISR(TIM0_COMPA_vect_do_work)
         break;
 
     case AV_READY:
+        // Sample the line to see if anyone else is perhaps stalling the
+        // bus. If so, keep trying to send our ready bit until everyone
+        // is ready.
+        if (!(sample_val & (1 << PINB1)))
+            break;
+
         if (flags & FLAG_SEND) {
             action = ACTION_SEND;
         } else {
@@ -584,10 +590,8 @@ void loop(void)
             next_bit = 1;
             // Odd parity over zero bits is 1
             flags |= FLAG_PARITY;
-            if (state == STATE_ENUMERATE)
-                action = ACTION_SEND;
-            else
-                action = ACTION_READY;
+
+            action = ACTION_READY;
             break;
         }
 
