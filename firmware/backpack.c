@@ -337,7 +337,6 @@ ISR(TIM0_COMPA_vect_do_work)
         }
 
         next_bit <<= 1;
-        action = AV_SEND;
         if (!next_bit) {
             if (flags & FLAG_USE_PARITY) {
                 if (flags & FLAG_PARITY)
@@ -347,11 +346,11 @@ ISR(TIM0_COMPA_vect_do_work)
             } else {
                 action = ACTION_STALL;
             }
+        } else {
+            action = ACTION_SEND;
         }
         break;
     case AV_SEND_PARITY:
-        action = ACTION_STALL;
-        break;
     case AV_SEND_ACK:
         action = ACTION_STALL;
         break;
