@@ -80,28 +80,27 @@ enum {
     NO_PARITY = 2,
 };
 
-int bp_read_byte(uint8_t flags = 0) {
-    uint8_t b = 0;
+bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
     uint8_t i = 8;
     bool parity_val = 1;
+    *b = 0;
     while (i--) {
-        b >>= 1;
-        b |= (bp_read_bit() ? 0x80 : 0);
-        if (b & 0x80)
+        *b >>= 1;
+        *b |= (bp_read_bit() ? 0x80 : 0);
+        if (*b & 0x80)
             parity_val ^= 1;
     }
     if (!(flags & NO_PARITY)) {
         if (bp_read_bit() != parity_val) {
             Serial.println("Parity error");
-            return -1;
+            return false;
         }
     }
     if (!(flags & DONT_WAIT_READY)) {
-        if (!bp_read_ready())
-            return -1;
+        return bp_read_ready();
     }
 
-    return b;
+    return true;
 }
 
 bool bp_write_byte(uint8_t b, uint8_t flags = 0){
@@ -124,16 +123,20 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
     return true;
 }
 
-void bp_scan() {
+bool bp_scan() {
+    bool ok = true;
     bp_reset();
-    bp_write_byte(0xaa, DONT_WAIT_READY | NO_PARITY);
+    ok = ok && bp_write_byte(0xaa, DONT_WAIT_READY | NO_PARITY);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
-    while (true) {
-        for (uint8_t i = 0; i < sizeof(id); ++i) {
-            id[i] = bp_read_byte(DONT_WAIT_READY | NO_PARITY);
+    while (ok) {
+        for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
+            ok = bp_read_byte(&id[i], DONT_WAIT_READY | NO_PARITY);
         }
+
+        if (!ok)
+            break;
 
         if (id[0] == 0xff && id[1] == 0xff && id[2] == 0xff && id[3] == 0xff) {
             // No device replied, we found them all
@@ -149,35 +152,30 @@ void bp_scan() {
         if (next_addr++ == 4)
             break;
     }
+    return ok;
 }
 
 bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+    bool ok = true;
     bp_reset();
-    if (!bp_write_byte(addr, NO_PARITY)) {
-        Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" not on the bus?");
-        return false;
-    }
-    // TODO: Check result of these calls
-    bp_write_byte(0x01);
-    bp_write_byte(offset);
-    while (len--)
-        *buf++ = bp_read_byte();
-    return true;
+    ok = ok && bp_write_byte(addr, NO_PARITY);
+    ok = ok && bp_write_byte(0x01);
+    ok = ok && bp_write_byte(offset);
+    while (ok && len--)
+        ok = bp_read_byte(buf++);
+    return ok;
 }
 
 bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+    bool ok = true;
     bp_reset();
-    if (!bp_write_byte(addr, NO_PARITY)) {
-        Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" not on the bus?");
-        return false;
+    ok = ok && bp_write_byte(addr, NO_PARITY);
+    ok = ok && bp_write_byte(0x02);
+    ok = ok && bp_write_byte(offset);
+    while (ok && len--) {
+        ok = bp_write_byte(*buf++);
     }
-    // TODO: Check result of these calls
-    bp_write_byte(0x02);
-    bp_write_byte(offset);
-    while (len--) {
-        bp_write_byte(*buf++);
-    }
-    return true;
+    return ok;
 }
 
 
@@ -191,9 +189,10 @@ uint8_t eeprom_written = false;
 
 
 void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+    Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" EEPROM:");
+    Serial.print("  ");
     if (!bp_read_eeprom(addr, offset, buf, len))
         return;
-    Serial.print("Device "); Serial.print(addr, HEX); Serial.print(" EEPROM: ");
     while (len--) {
         if (*buf < 0x10) Serial.print("0");
         Serial.print(*buf++, HEX);
