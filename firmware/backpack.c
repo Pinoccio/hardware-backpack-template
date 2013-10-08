@@ -82,9 +82,7 @@ enum {
     AV_SEND = 0x1,
     AV_RECEIVE = 0x2,
     AV_SEND_NACK = 0x3,
-    AV_SEND_PARITY = 0x4,
     AV_SEND_ACK = 0x5,
-    AV_CHECK_PARITY = 0x6,
     AV_READY = 0x7,
     AV_STALL = 0x8,
 
@@ -105,13 +103,10 @@ enum {
     ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW,
     ACTION_SEND_HIGH_CHECK_COLLISION = AV_SEND | AF_SAMPLE,
     ACTION_RECEIVE = AV_RECEIVE | AF_SAMPLE,
-    ACTION_CHECK_PARITY = AV_CHECK_PARITY | AF_SAMPLE,
     ACTION_ACK_LOW = AV_SEND_ACK | AF_LINE_LOW,
     ACTION_ACK_HIGH = AV_SEND_ACK,
     ACTION_NACK_LOW = AV_SEND_NACK | AF_LINE_LOW,
     ACTION_NACK_HIGH = AV_SEND_NACK,
-    ACTION_SEND_PARITY_HIGH = AV_SEND_PARITY,
-    ACTION_SEND_PARITY_LOW = AV_SEND_PARITY | AF_LINE_LOW,
     ACTION_READY = AV_READY | AF_SAMPLE,
 };
 
@@ -221,7 +216,15 @@ ISR(INT0_vect_do_work)
     set_sleep_mode(SLEEP_MODE_IDLE);
 
     if (action == ACTION_SEND) {
-        if (!(byte_buf & next_bit)) {
+        bool val;
+        if (next_bit) {
+            val = (byte_buf & next_bit);
+        } else {
+            // next_bit == 0 means to send the parity bit
+            val = (flags & FLAG_PARITY);
+        }
+
+        if (!val) {
             action = ACTION_SEND_LOW;
         } else if (flags & FLAG_CHECK_COLLISION) {
             action = ACTION_SEND_HIGH_CHECK_COLLISION;
@@ -294,8 +297,6 @@ ISR(TIM0_COMPA_vect, ISR_NAKED)
 
 ISR(TIM0_COMPA_vect_do_work)
 {
-    uint8_t parity, val;
-
     switch (action & ACTION_MASK) {
     case AV_RECEIVE:
         // Read and store bit value
@@ -303,15 +304,9 @@ ISR(TIM0_COMPA_vect_do_work)
             byte_buf |= next_bit;
             flags ^= FLAG_PARITY;
         }
-        next_bit <<= 1;
-        if (!next_bit) {
-            action = ACTION_CHECK_PARITY;
-        }
-        break;
-    case AV_CHECK_PARITY:
-        parity = (flags & FLAG_PARITY);
-        val = sample_val & (1 << PINB1);
-        if ((val != 0 && parity != 0) || (val == 0 && parity == 0)) {
+        if (next_bit) {
+            next_bit <<= 1;
+        } else if (!(flags & FLAG_PARITY)) {
             if (flags & FLAG_ACK_LOW)
                 action = ACTION_ACK_LOW;
             else
@@ -332,17 +327,14 @@ ISR(TIM0_COMPA_vect_do_work)
             flags |= FLAG_MUTE;
         }
 
-        next_bit <<= 1;
-        if (!next_bit) {
-            if (flags & FLAG_PARITY)
-                action = ACTION_SEND_PARITY_HIGH;
-            else
-                action = ACTION_SEND_PARITY_LOW;
-        } else {
+        if (next_bit) {
+            // Send next bit, or parity bit
+            next_bit <<= 1;
             action = ACTION_SEND;
+        } else {
+            action = ACTION_STALL;
         }
         break;
-    case AV_SEND_PARITY:
     case AV_SEND_ACK:
         action = ACTION_STALL;
         break;
