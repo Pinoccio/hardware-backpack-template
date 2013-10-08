@@ -4,6 +4,9 @@ GCC_MCU=attiny13
 AVRDUDE_PART=t13
 CFLAGS=-Wall -mmcu=$(GCC_MCU) -Os
 
+# Don't use jump tables, they make the code bigger
+CFLAGS+=-fno-jump-tables
+
 -include Makefile.local
 
 all: upload
