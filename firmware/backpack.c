@@ -487,6 +487,8 @@ void loop(void)
                 next_bit = 1;
                 // Enable parity for every byte after this one
                 flags |= FLAG_USE_PARITY;
+                // Use low ack and high nack bits from now on
+                flags |= FLAG_ACK_LOW;
                 // Odd parity over zero bits is 1
                 flags |= FLAG_PARITY;
             } else {
