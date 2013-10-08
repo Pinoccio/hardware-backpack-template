@@ -29,14 +29,16 @@
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xff:m -U lfuse:w:0x29:m
 // TODO: Decide on brownout detection and watchdog timer
 
+// 4.8Mhz oscillator with CKDIV8 fuse set
+#define F_CPU (4800000/8)
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/cpufunc.h>
 #include <avr/sleep.h>
+#include <util/delay.h>
 #include <stdbool.h>
 
-// 4.8Mhz oscillator with CKDIV8 fuse set
-#define F_CPU (4800000/8)
 
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
 #define pulse(pin) \
