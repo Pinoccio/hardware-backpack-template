@@ -78,6 +78,7 @@ bool bp_read_ready() {
 enum {
     DONT_WAIT_READY = 1,
     NO_PARITY = 2,
+    ACK_HIGH = 4,
 };
 
 bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
@@ -104,6 +105,7 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
 }
 
 bool bp_write_byte(uint8_t b, uint8_t flags = 0){
+    uint8_t ack = (flags & ACK_HIGH) ? HIGH : LOW;
     uint8_t i = 8;
     bool parity_val= 1;
     while (i--) {
@@ -113,7 +115,7 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
     }
     if (!(flags & NO_PARITY)) {
         bp_write_bit(parity_val);
-        if (bp_read_bit() == HIGH) {
+        if (bp_read_bit() != ack) {
             Serial.println("NAK received");
             return false;
         }
@@ -126,13 +128,13 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
 bool bp_scan() {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(0xaa, NO_PARITY);
+    ok = ok && bp_write_byte(0xaa, ACK_HIGH);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
-            ok = bp_read_byte(&id[i], NO_PARITY);
+            ok = bp_read_byte(&id[i]);
         }
 
         if (!ok)
@@ -158,7 +160,7 @@ bool bp_scan() {
 bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(addr, NO_PARITY);
+    ok = ok && bp_write_byte(addr, ACK_HIGH);
     ok = ok && bp_write_byte(0x01);
     ok = ok && bp_write_byte(offset);
     while (ok && len--)
@@ -169,7 +171,7 @@ bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(addr, NO_PARITY);
+    ok = ok && bp_write_byte(addr, ACK_HIGH);
     ok = ok && bp_write_byte(0x02);
     ok = ok && bp_write_byte(offset);
     while (ok && len--) {

@@ -139,8 +139,6 @@ enum {
     FLAG_MUTE = 1,
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
-    // Does the current byte need parity?
-    FLAG_USE_PARITY = 4,
     FLAG_CHECK_COLLISION = 8,
     FLAG_ACK_LOW = 16,
     FLAG_SEND = 32,
@@ -227,6 +225,7 @@ ISR(INT0_vect_do_work)
             action = ACTION_SEND_LOW;
         } else if (flags & FLAG_CHECK_COLLISION) {
             action = ACTION_SEND_HIGH_CHECK_COLLISION;
+            flags ^= FLAG_PARITY;
         } else {
             action = ACTION_SEND_HIGH;
             flags ^= FLAG_PARITY;
@@ -306,10 +305,7 @@ ISR(TIM0_COMPA_vect_do_work)
         }
         next_bit <<= 1;
         if (!next_bit) {
-            if (flags & FLAG_USE_PARITY)
-                action = ACTION_CHECK_PARITY;
-            else
-                action = ACTION_STALL;
+            action = ACTION_CHECK_PARITY;
         }
         break;
     case AV_CHECK_PARITY:
@@ -338,14 +334,10 @@ ISR(TIM0_COMPA_vect_do_work)
 
         next_bit <<= 1;
         if (!next_bit) {
-            if (flags & FLAG_USE_PARITY) {
-                if (flags & FLAG_PARITY)
-                    action = ACTION_SEND_PARITY_HIGH;
-                else
-                    action = ACTION_SEND_PARITY_LOW;
-            } else {
-                action = ACTION_STALL;
-            }
+            if (flags & FLAG_PARITY)
+                action = ACTION_SEND_PARITY_HIGH;
+            else
+                action = ACTION_SEND_PARITY_LOW;
         } else {
             action = ACTION_SEND;
         }
@@ -387,7 +379,7 @@ ISR(TIM0_COMPB_vect)
         action = ACTION_RECEIVE;
         byte_buf = 0;
         next_bit = 1;
-        flags = 0;
+        flags = FLAG_PARITY;
     } else {
         set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 
@@ -490,8 +482,6 @@ void loop(void)
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
-                // Enable parity for every byte after this one
-                flags |= FLAG_USE_PARITY;
                 // Use low ack and high nack bits from now on
                 flags |= FLAG_ACK_LOW;
                 // Odd parity over zero bits is 1
@@ -550,7 +540,6 @@ void loop(void)
             state = STATE_WRITE_EEPROM_WRITE;
             break;
         case STATE_WRITE_EEPROM_WRITE:
-            pulse(PINB4);
             // Write the byte received, but refuse to write our id
             if (next_byte >= ID_OFFSET + ID_SIZE)
                 EEPROM_write(next_byte, byte_buf);
