@@ -72,15 +72,45 @@ enum {
 };
 
 // Constants for the current action the low level protocol handler
-// Some of these can be combined.
 enum {
-    ACTION_IDLE = 0,
-    ACTION_RECEIVE = 1,
-    ACTION_SEND = 2,
-    ACTION_STALL = 4,
-    ACTION_READY = 8,
-    ACTION_PARITY = 16,
-    ACTION_ACK = 32,
+    // These are the actual action values, which define the action to
+    // take for the current bit
+
+    AV_IDLE = 0x0,
+    AV_SEND = 0x1,
+    AV_RECEIVE = 0x2,
+    AV_SEND_NACK = 0x3,
+    AV_SEND_PARITY = 0x4,
+    AV_SEND_ACK = 0x5,
+    AV_CHECK_PARITY = 0x6,
+    AV_READY = 0x7,
+    AV_STALL = 0x8,
+
+    // Mask for the action global to get one of the above values
+    ACTION_MASK = 0xf,
+
+    // These are action flags that can be combined with the above values
+    AF_SAMPLE = 0x80,
+    AF_LINE_LOW = 0x40,
+
+    // These are the complete values (action value plus any relevant
+    // action flags). The action global variable is always set to one of
+    // these values.
+    ACTION_IDLE = AV_IDLE,
+    ACTION_STALL = AV_STALL,
+    ACTION_SEND = AV_SEND,
+    ACTION_SEND_HIGH = AV_SEND,
+    ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW,
+    ACTION_SEND_HIGH_CHECK_COLLISION = AV_SEND | AF_SAMPLE,
+    ACTION_RECEIVE = AV_RECEIVE | AF_SAMPLE,
+    ACTION_CHECK_PARITY = AV_CHECK_PARITY | AF_SAMPLE,
+    ACTION_ACK_LOW = AV_SEND_ACK | AF_LINE_LOW,
+    ACTION_ACK_HIGH = AV_SEND_ACK,
+    ACTION_NACK_LOW = AV_SEND_NACK | AF_LINE_LOW,
+    ACTION_NACK_HIGH = AV_SEND_NACK,
+    ACTION_SEND_PARITY_HIGH = AV_SEND_PARITY,
+    ACTION_SEND_PARITY_LOW = AV_SEND_PARITY | AF_LINE_LOW,
+    ACTION_READY = AV_READY,
 };
 
 // Constants for the current state for the high level protocol handler
@@ -104,20 +134,14 @@ enum {
 };
 
 enum {
-    TIMA_ACTION_NONE = 0,
-    TIMA_ACTION_RELEASE = 1,
-    TIMA_ACTION_NEXT_BIT = 2,
-    TIMA_ACTION_READ = 4,
-    TIMA_ACTION_CHECK_COLLISION = 8,
-    TIMA_ACTION_CHECK_PARITY = 16,
-};
-
-enum {
     FLAG_MUTE = 1,
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
     // Does the current byte need parity?
     FLAG_USE_PARITY = 4,
+    FLAG_CHECK_COLLISION = 8,
+    FLAG_ACK_LOW = 16,
+    FLAG_SEND = 32,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -196,50 +220,36 @@ ISR(INT0_vect_do_work)
     MCUCR |= (1<<ISC01);
     set_sleep_mode(SLEEP_MODE_IDLE);
 
-    timera_action = TIMA_ACTION_NONE;
-    if (action & ACTION_READY) {
-        // Pull the line low
-        // Let if float again after some time
-        timera_action = TIMA_ACTION_RELEASE;
-        action &= ~ACTION_READY;
-    } else if (action & ACTION_ACK) {
-        timera_action = TIMA_ACTION_RELEASE;
-        action &= ~ACTION_ACK;
-        action |= ACTION_STALL;
-    } else if (action & ACTION_STALL) {
-        ;
-    } else if (flags & FLAG_MUTE) {
-        // We're muted, so only count bits
-        timera_action = TIMA_ACTION_NEXT_BIT;
-    } else if (action == (ACTION_RECEIVE | ACTION_PARITY)) {
-        timera_action = TIMA_ACTION_CHECK_PARITY;
-        action &= ~ACTION_PARITY;
-    } else if (action & ACTION_RECEIVE) {
-        timera_action = TIMA_ACTION_READ | TIMA_ACTION_NEXT_BIT;
-    } else if (action == (ACTION_SEND | ACTION_PARITY)) {
-        action &= ~ACTION_PARITY;
-        action |= ACTION_STALL;
-        if ((flags & FLAG_PARITY) == 0)
-            timera_action = TIMA_ACTION_RELEASE;
-    } else if (action & ACTION_SEND) {
-        if ((byte_buf & next_bit) == 0) {
-            // Pull the line low
-            // Let if float again after some time
-            timera_action = TIMA_ACTION_RELEASE | TIMA_ACTION_NEXT_BIT;
-        } else if (state == STATE_ENUMERATE) {
-            // Check for address collisions
-            timera_action = TIMA_ACTION_CHECK_COLLISION | TIMA_ACTION_NEXT_BIT;
+    if (action == ACTION_SEND) {
+        if (!(byte_buf & next_bit)) {
+            action = ACTION_SEND_LOW;
+        } else if (flags & FLAG_CHECK_COLLISION) {
+            action = ACTION_SEND_HIGH_CHECK_COLLISION;
         } else {
-            timera_action = TIMA_ACTION_NEXT_BIT;
+            action = ACTION_SEND_HIGH;
             flags ^= FLAG_PARITY;
         }
     }
 
-    if (timera_action == TIMA_ACTION_NEXT_BIT) {
+    /* Don't bother doing either of these when we're muted */
+    if (flags & FLAG_MUTE)
+        action &= ~(AF_LINE_LOW | AF_SAMPLE);
+
+    if ((action & AF_LINE_LOW)) {
+        // Pull the line low and schedule a timer to release it again
+        OCR0A = DATA_WRITE;
+        DDRB |= (1 << PINB1);
+        TIMSK0 |=  (1 << OCIE0A);
+    } else if (action & AF_SAMPLE) {
+        // Schedule a timer to sample the line
+        OCR0A = DATA_SAMPLE;
+        TIMSK0 |=  (1 << OCIE0A);
+    } else {
         // If the only thing that needs to happen in the timer handler
-        // is advancing to the next bit, we might as well do it right
-        // away. We don't want duplicate code, so we pretend the
-        // timer interrupt happens directly.
+        // is advancing to the next action, we might as well do it right
+        // away (note that we can usually _not_ do it right away). We
+        // don't want duplicate code, so we pretend the timer interrupt
+        // happens directly.
         // We use an assembly call here, because when the compiler sees
         // a regular call, this causes this ISR (the caller) to save
         // _all_ call-clobbered registers, in case the called function
@@ -247,21 +257,13 @@ ISR(INT0_vect_do_work)
         // bogus, since we're calling a signal handler which will save
         // everything it touches already (which also means that hiding
         // this function call from the compiler is safe).
-        // Note that the obvious alternative (having a do_next_bit()
+        // Note that the obvious alternative (having a next_action()
         // function and call it from both signal handlers has the same
         // problem. We could declare it as a signal handler and do the
         // same trick with an asm call, but that still causes quite some
         // overhead because the function will unconditionally save r0,
         // r1 and the status register, even when it doesn't change it.
         asm("rcall " EXPAND_AND_STRINGIFY(TIM0_COMPA_vect));
-    } else if (timera_action) {
-        TIMSK0 |=  (1 << OCIE0A);
-        OCR0A = DATA_SAMPLE;
-
-        if (timera_action & TIMA_ACTION_RELEASE) {
-            OCR0A = DATA_WRITE;
-            DDRB |= (1 << PINB1);
-        }
     }
 }
 
@@ -291,49 +293,77 @@ ISR(TIM0_COMPA_vect, ISR_NAKED)
 
 ISR(TIM0_COMPA_vect_do_work)
 {
-    if (timera_action & TIMA_ACTION_CHECK_COLLISION) {
-        if (!(sample_val & (1 << PINB1))) {
+    uint8_t parity, val;
+
+    switch (action & ACTION_MASK) {
+    case AV_RECEIVE:
+        // Read and store bit value
+        if (sample_val & (1 << PINB1)) {
+            byte_buf |= next_bit;
+            flags ^= FLAG_PARITY;
+        }
+        next_bit <<= 1;
+        if (!next_bit) {
+            if (flags & FLAG_USE_PARITY)
+                action = ACTION_CHECK_PARITY;
+            else
+                action = ACTION_STALL;
+        }
+        break;
+    case AV_CHECK_PARITY:
+        parity = (flags & FLAG_PARITY);
+        val = sample_val & (1 << PINB1);
+        if ((val != 0 && parity != 0) || (val == 0 && parity == 0)) {
+            if (flags & FLAG_ACK_LOW)
+                action = ACTION_ACK_LOW;
+            else
+                action = ACTION_ACK_HIGH;
+        } else {
+            if (flags & FLAG_ACK_LOW)
+                action = ACTION_NACK_HIGH;
+            else
+                action = ACTION_NACK_LOW;
+        }
+        break;
+    case AV_SEND:
+        if ((action & AF_SAMPLE) && !(sample_val & (1 << PINB1))) {
             // We're sending our address, but are not currently pulling the
             // line low. Check if the line is actually high. If not, someone
             // else is pulling the line low, so we drop out of the current
             // address sending round.
             flags |= FLAG_MUTE;
         }
-    }
 
-
-    if (timera_action & TIMA_ACTION_READ) {
-        // Read and store bit value
-        if (sample_val & (1 << PINB1)) {
-            byte_buf |= next_bit;
-            flags ^= FLAG_PARITY;
-        }
-    }
-
-    if (timera_action & TIMA_ACTION_CHECK_PARITY) {
-        uint8_t parity = (flags & FLAG_PARITY);
-        uint8_t val = sample_val & (1 << PINB1);
-        if ((val != 0 && parity != 0) || (val == 0 && parity == 0)) {
-            action |= ACTION_ACK;
-            pulse(PINB2);
-        } else {
-            // Drop off the bus, which will implicitly send a NAC (high)
-            // bit.
-            action |= ACTION_IDLE;
-            pulse(PINB0);
-        }
-    }
-
-    if (timera_action & TIMA_ACTION_NEXT_BIT) {
         next_bit <<= 1;
-
-        // Full byte received? Stall while main loop to process
+        action = AV_SEND;
         if (!next_bit) {
-            if (flags & FLAG_USE_PARITY)
-                action |= ACTION_PARITY;
-            else
-                action |= ACTION_STALL;
+            if (flags & FLAG_USE_PARITY) {
+                if (flags & FLAG_PARITY)
+                    action = ACTION_SEND_PARITY_HIGH;
+                else
+                    action = ACTION_SEND_PARITY_LOW;
+            } else {
+                action = ACTION_STALL;
+            }
         }
+        break;
+    case AV_SEND_PARITY:
+        action = ACTION_STALL;
+        break;
+    case AV_SEND_ACK:
+        action = ACTION_STALL;
+        break;
+    case AV_SEND_NACK:
+        action = ACTION_IDLE;
+        break;
+
+    case AV_READY:
+        if (flags & FLAG_SEND) {
+            action = ACTION_SEND;
+        } else {
+            action = ACTION_RECEIVE;
+        }
+        break;
     }
 
     // Disable this timer interrupt
@@ -350,8 +380,7 @@ ISR(TIM0_COMPB_vect)
         action = ACTION_RECEIVE;
         byte_buf = 0;
         next_bit = 1;
-        flags &= ~FLAG_USE_PARITY;
-        flags &= ~FLAG_MUTE;
+        flags = 0;
     } else {
         set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 
@@ -435,18 +464,22 @@ void setup(void)
 
 void loop(void)
 {
-    if (action & ACTION_STALL) {
+    if (action == ACTION_STALL) {
         // Done receiving or sending a byte
         switch(state) {
         case STATE_READ_ADDRESS:
             if (byte_buf == BC_CMD_ENUMERATE) {
                 state = STATE_ENUMERATE;
-                action = ACTION_SEND | ACTION_STALL;
+                flags |= FLAG_CHECK_COLLISION;
+                flags |= FLAG_SEND;
+                // Don't change out of STALL, let the next iteration
+                // prepare the first byte
                 next_byte = ID_OFFSET;
                 bus_addr = 0;
             } else if (byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
-                action = ACTION_RECEIVE | ACTION_READY;
+                action = ACTION_READY;
+                flags &= ~FLAG_SEND;
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
@@ -463,7 +496,8 @@ void loop(void)
         case STATE_READ_COMMAND:
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
-                    action = ACTION_RECEIVE | ACTION_READY;
+                    action = ACTION_READY;
+                    flags &= ~ACTION_SEND;
                     state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
@@ -472,7 +506,8 @@ void loop(void)
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_ADDR;
-                    action = ACTION_RECEIVE | ACTION_READY;
+                    action = ACTION_READY;
+                    flags &= ~FLAG_SEND;
                     byte_buf = 0;
                     next_bit = 1;
                     // Odd parity over zero bits is 1
@@ -490,7 +525,9 @@ void loop(void)
             next_bit = 1;
             // Odd parity over zero bits is 1
             flags |= FLAG_PARITY;
-            action = ACTION_SEND | ACTION_STALL;
+            flags |= FLAG_SEND;
+            // Don't change out of STALL, let the next iteration
+            // prepare the first byte
             state = STATE_READ_EEPROM_READ;
             break;
         case STATE_WRITE_EEPROM_ADDR:
@@ -499,7 +536,8 @@ void loop(void)
             byte_buf = 0;
             // Odd parity over zero bits is 1
             flags |= FLAG_PARITY;
-            action = ACTION_RECEIVE | ACTION_READY;
+            flags &= ~FLAG_SEND;
+            action = ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
             break;
         case STATE_WRITE_EEPROM_WRITE:
@@ -514,7 +552,7 @@ void loop(void)
             byte_buf = 0;
             // Odd parity over zero bits is 1
             flags |= FLAG_PARITY;
-            action = ACTION_RECEIVE | ACTION_READY;
+            action = ACTION_READY;
             break;
         case STATE_ENUMERATE:
             if (next_byte == ID_OFFSET + ID_SIZE) {
@@ -545,7 +583,7 @@ void loop(void)
             if (state == STATE_ENUMERATE)
                 action = ACTION_SEND;
             else
-                action = ACTION_SEND | ACTION_READY;
+                action = ACTION_READY;
             break;
         }
 
@@ -554,9 +592,9 @@ void loop(void)
     cli();
     // Only sleep if the main loop isn't supposed to do anything, to
     // prevent deadlock. There's a magic dance here to make sure
-    // an interrupt does not set the ACTION_STALL bit after we
+    // an interrupt does not set the action to ACTION_STALL after we
     // checked for it but before entering sleep mode
-    if (!(action & ACTION_STALL)) {
+    if (action != ACTION_STALL) {
         // The instruction after sei is guaranteed to execute before
         // any interrupts are triggered, so we can be sure the sleep
         // mode is entered, with interrupts enabled, but before any
