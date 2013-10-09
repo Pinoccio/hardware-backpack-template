@@ -353,7 +353,9 @@ ISR(TIM0_COMPA_vect_do_work)
             action = ACTION_SEND;
         } else {
             action = ACTION_RECEIVE;
+            byte_buf = 0;
         }
+        next_bit = 1;
         break;
 
     case AV_READY:
@@ -488,8 +490,6 @@ void loop(void)
                 action = ACTION_READY;
                 flags &= ~FLAG_SEND;
                 state = STATE_READ_COMMAND;
-                byte_buf = 0;
-                next_bit = 1;
             } else {
                 // We're not addressed, stop paying attention
                 action = ACTION_IDLE;
@@ -502,15 +502,11 @@ void loop(void)
                     action = ACTION_READY;
                     flags &= ~ACTION_SEND;
                     state = STATE_READ_EEPROM_ADDR;
-                    byte_buf = 0;
-                    next_bit = 1;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_ADDR;
                     action = ACTION_READY;
                     flags &= ~FLAG_SEND;
-                    byte_buf = 0;
-                    next_bit = 1;
                     break;
                 default:
                     // Unknown command
@@ -521,7 +517,6 @@ void loop(void)
             break;
         case STATE_READ_EEPROM_ADDR:
             next_byte = byte_buf;
-            next_bit = 1;
             flags |= FLAG_SEND;
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
@@ -529,8 +524,6 @@ void loop(void)
             break;
         case STATE_WRITE_EEPROM_ADDR:
             next_byte = byte_buf;
-            next_bit = 1;
-            byte_buf = 0;
             flags &= ~FLAG_SEND;
             action = ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
@@ -542,8 +535,6 @@ void loop(void)
             // Advance to the next byte (even when we refused to
             // write).
             next_byte++;
-            next_bit = 1;
-            byte_buf = 0;
             action = ACTION_READY;
             break;
         case STATE_ENUMERATE:
@@ -570,7 +561,6 @@ void loop(void)
             // Read and send next EEPROM byte
             byte_buf = EEPROM_read(next_byte);
             next_byte++;
-            next_bit = 1;
 
             action = ACTION_READY;
             break;
