@@ -137,8 +137,12 @@ enum {
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
     FLAG_CHECK_COLLISION = 8,
+    // After the ACK/NACK bit, switch to the send action and start
+    // sending the byte in byte_buf. Only considered when FLAG_IDLE is
+    // not set.
     FLAG_SEND = 32,
-    FLAG_RECEIVE = 64,
+    // After the ACK/NACK bit, switch to idle and drop off the bus
+    FLAG_IDLE = 64,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -310,7 +314,7 @@ ISR(TIM0_COMPA_vect_do_work)
             next_bit <<= 1;
         } else if (flags & FLAG_PARITY) {
             action = ACTION_READY;
-            flags &= ~(FLAG_SEND | FLAG_RECEIVE);
+            flags |= FLAG_IDLE;
         } else {
             action = ACTION_STALL;
         }
@@ -343,12 +347,12 @@ ISR(TIM0_COMPA_vect_do_work)
         // Odd parity over zero bits is 1
         flags |= FLAG_PARITY;
 
-        if (flags & FLAG_SEND) {
-            action = ACTION_SEND;
-        } else if (flags & FLAG_RECEIVE) {
-            action = ACTION_RECEIVE;
-        } else {
+        if (flags & FLAG_IDLE) {
             action = ACTION_IDLE;
+        } else if (flags & FLAG_SEND) {
+            action = ACTION_SEND;
+        } else {
+            action = ACTION_RECEIVE;
         }
         break;
 
@@ -475,7 +479,6 @@ void loop(void)
                 flags = FLAG_SEND | FLAG_CHECK_COLLISION;
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
-                flags &= ~FLAG_RECEIVE;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
                 next_byte = ID_OFFSET;
@@ -484,7 +487,6 @@ void loop(void)
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
                 flags &= ~FLAG_SEND;
-                flags |= FLAG_RECEIVE;
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
@@ -499,7 +501,6 @@ void loop(void)
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
                     flags &= ~ACTION_SEND;
-                    flags |= FLAG_RECEIVE;
                     state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
@@ -508,7 +509,6 @@ void loop(void)
                     state = STATE_WRITE_EEPROM_ADDR;
                     action = ACTION_READY;
                     flags &= ~FLAG_SEND;
-                    flags |= FLAG_RECEIVE;
                     byte_buf = 0;
                     next_bit = 1;
                     break;
@@ -523,7 +523,6 @@ void loop(void)
             next_byte = byte_buf;
             next_bit = 1;
             flags |= FLAG_SEND;
-            flags &= ~FLAG_RECEIVE;
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
             state = STATE_READ_EEPROM_READ;
@@ -533,7 +532,6 @@ void loop(void)
             next_bit = 1;
             byte_buf = 0;
             flags &= ~FLAG_SEND;
-            flags |= FLAG_RECEIVE;
             action = ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
             break;
@@ -563,7 +561,7 @@ void loop(void)
                     // paying attention
                     state = STATE_IDLE;
                     action = ACTION_READY;
-                    flags &= ~(FLAG_SEND|FLAG_RECEIVE);
+                    flags |= FLAG_IDLE;
                     break;
                 }
             }
