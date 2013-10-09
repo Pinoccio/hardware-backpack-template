@@ -137,6 +137,7 @@ enum {
     FLAG_CHECK_COLLISION = 8,
     FLAG_ACK_LOW = 16,
     FLAG_SEND = 32,
+    FLAG_RECEIVE = 64,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -306,16 +307,11 @@ ISR(TIM0_COMPA_vect_do_work)
         }
         if (next_bit) {
             next_bit <<= 1;
-        } else if (!(flags & FLAG_PARITY)) {
-            if (flags & FLAG_ACK_LOW)
-                action = ACTION_ACK_LOW;
-            else
-                action = ACTION_ACK_HIGH;
+        } else if (flags & FLAG_PARITY) {
+            action = ACTION_READY;
+            flags &= ~(FLAG_SEND | FLAG_RECEIVE);
         } else {
-            if (flags & FLAG_ACK_LOW)
-                action = ACTION_NACK_HIGH;
-            else
-                action = ACTION_NACK_LOW;
+            action = ACTION_STALL;
         }
         break;
     case AV_SEND:
@@ -336,10 +332,17 @@ ISR(TIM0_COMPA_vect_do_work)
         }
         break;
     case AV_SEND_ACK:
-        action = ACTION_STALL;
-        break;
     case AV_SEND_NACK:
-        action = ACTION_IDLE;
+        // Odd parity over zero bits is 1
+        flags |= FLAG_PARITY;
+
+        if (flags & FLAG_SEND) {
+            action = ACTION_SEND;
+        } else if (flags & FLAG_RECEIVE) {
+            action = ACTION_RECEIVE;
+        } else {
+            action = ACTION_IDLE;
+        }
         break;
 
     case AV_READY:
@@ -349,11 +352,18 @@ ISR(TIM0_COMPA_vect_do_work)
         if (!(sample_val & (1 << PINB1)))
             break;
 
-        if (flags & FLAG_SEND) {
-            action = ACTION_SEND;
+        if (!(flags & FLAG_PARITY)) {
+            if (flags & FLAG_ACK_LOW)
+                action = ACTION_ACK_LOW;
+            else
+                action = ACTION_ACK_HIGH;
         } else {
-            action = ACTION_RECEIVE;
+            if (flags & FLAG_ACK_LOW)
+                action = ACTION_NACK_HIGH;
+            else
+                action = ACTION_NACK_LOW;
         }
+
         break;
     }
 
@@ -456,13 +466,17 @@ void setup(void)
 void loop(void)
 {
     if (action == ACTION_STALL) {
+        flags |= FLAG_ACK_LOW;
         // Done receiving or sending a byte
         switch(state) {
         case STATE_READ_ADDRESS:
+            flags &= ~FLAG_ACK_LOW;
             if (byte_buf == BC_CMD_ENUMERATE) {
                 state = STATE_ENUMERATE;
+                flags = FLAG_SEND | FLAG_CHECK_COLLISION;
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
+                flags &= ~FLAG_RECEIVE;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
                 next_byte = ID_OFFSET;
@@ -471,13 +485,10 @@ void loop(void)
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
                 flags &= ~FLAG_SEND;
+                flags |= FLAG_RECEIVE;
                 state = STATE_READ_COMMAND;
                 byte_buf = 0;
                 next_bit = 1;
-                // Use low ack and high nack bits from now on
-                flags |= FLAG_ACK_LOW;
-                // Odd parity over zero bits is 1
-                flags |= FLAG_PARITY;
             } else {
                 // We're not addressed, stop paying attention
                 action = ACTION_IDLE;
@@ -489,20 +500,18 @@ void loop(void)
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
                     flags &= ~ACTION_SEND;
+                    flags |= FLAG_RECEIVE;
                     state = STATE_READ_EEPROM_ADDR;
                     byte_buf = 0;
                     next_bit = 1;
-                    // Odd parity over zero bits is 1
-                    flags |= FLAG_PARITY;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_ADDR;
                     action = ACTION_READY;
                     flags &= ~FLAG_SEND;
+                    flags |= FLAG_RECEIVE;
                     byte_buf = 0;
                     next_bit = 1;
-                    // Odd parity over zero bits is 1
-                    flags |= FLAG_PARITY;
                     break;
                 default:
                     // Unknown command
@@ -514,9 +523,8 @@ void loop(void)
         case STATE_READ_EEPROM_ADDR:
             next_byte = byte_buf;
             next_bit = 1;
-            // Odd parity over zero bits is 1
-            flags |= FLAG_PARITY;
             flags |= FLAG_SEND;
+            flags &= ~FLAG_RECEIVE;
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
             state = STATE_READ_EEPROM_READ;
@@ -525,9 +533,8 @@ void loop(void)
             next_byte = byte_buf;
             next_bit = 1;
             byte_buf = 0;
-            // Odd parity over zero bits is 1
-            flags |= FLAG_PARITY;
             flags &= ~FLAG_SEND;
+            flags |= FLAG_RECEIVE;
             action = ACTION_READY;
             state = STATE_WRITE_EEPROM_WRITE;
             break;
@@ -540,11 +547,10 @@ void loop(void)
             next_byte++;
             next_bit = 1;
             byte_buf = 0;
-            // Odd parity over zero bits is 1
-            flags |= FLAG_PARITY;
             action = ACTION_READY;
             break;
         case STATE_ENUMERATE:
+            flags &= ~FLAG_ACK_LOW;
             if (next_byte == ID_OFFSET + ID_SIZE) {
                 // Entire address sent
                 if (flags & FLAG_MUTE) {
@@ -558,7 +564,8 @@ void loop(void)
                     // so claim the current bus address and stop
                     // paying attention
                     state = STATE_IDLE;
-                    action = ACTION_IDLE;
+                    action = ACTION_READY;
+                    flags &= ~(FLAG_SEND|FLAG_RECEIVE);
                     break;
                 }
             }
@@ -568,8 +575,6 @@ void loop(void)
             byte_buf = EEPROM_read(next_byte);
             next_byte++;
             next_bit = 1;
-            // Odd parity over zero bits is 1
-            flags |= FLAG_PARITY;
 
             action = ACTION_READY;
             break;
