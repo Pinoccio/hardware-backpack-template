@@ -552,7 +552,7 @@ void loop(void)
                 if (flags & FLAG_MUTE) {
                     // Another device had a lower id, so try again
                     // on the next round
-                    next_byte = 0;
+                    next_byte = ID_OFFSET;
                     bus_addr++;
                     flags &= ~FLAG_MUTE;
                 } else {
