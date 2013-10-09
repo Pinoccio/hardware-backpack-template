@@ -539,7 +539,7 @@ void loop(void)
             break;
         case STATE_WRITE_EEPROM_WRITE:
             // Write the byte received, but refuse to write our id
-            if (next_byte >= ID_OFFSET + ID_SIZE)
+            if (next_byte < ID_OFFSET || next_byte >= ID_OFFSET + ID_SIZE)
                 EEPROM_write(next_byte, byte_buf);
             // Advance to the next byte (even when we refused to
             // write).
