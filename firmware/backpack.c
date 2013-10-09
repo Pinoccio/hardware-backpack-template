@@ -81,8 +81,10 @@ enum {
     AV_IDLE = 0x0,
     AV_SEND = 0x1,
     AV_RECEIVE = 0x2,
-    AV_SEND_NACK = 0x3,
-    AV_SEND_ACK = 0x5,
+    AV_ACK1 = 0x3,
+    AV_ACK2 = 0x4,
+    AV_NACK1 = 0x5,
+    AV_NACK2 = 0x6,
     AV_READY = 0x7,
     AV_STALL = 0x8,
 
@@ -103,10 +105,10 @@ enum {
     ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW,
     ACTION_SEND_HIGH_CHECK_COLLISION = AV_SEND | AF_SAMPLE,
     ACTION_RECEIVE = AV_RECEIVE | AF_SAMPLE,
-    ACTION_ACK_LOW = AV_SEND_ACK | AF_LINE_LOW,
-    ACTION_ACK_HIGH = AV_SEND_ACK,
-    ACTION_NACK_LOW = AV_SEND_NACK | AF_LINE_LOW,
-    ACTION_NACK_HIGH = AV_SEND_NACK,
+    ACTION_ACK1 = AV_ACK1 | AF_LINE_LOW,
+    ACTION_ACK2 = AV_ACK2,
+    ACTION_NACK1 = AV_NACK1,
+    ACTION_NACK2 = AV_NACK2 | AF_LINE_LOW,
     ACTION_READY = AV_READY | AF_SAMPLE,
 };
 
@@ -135,7 +137,6 @@ enum {
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
     FLAG_CHECK_COLLISION = 8,
-    FLAG_ACK_LOW = 16,
     FLAG_SEND = 32,
     FLAG_RECEIVE = 64,
 };
@@ -331,8 +332,14 @@ ISR(TIM0_COMPA_vect_do_work)
             action = ACTION_STALL;
         }
         break;
-    case AV_SEND_ACK:
-    case AV_SEND_NACK:
+    case AV_ACK1:
+        action = ACTION_ACK2;
+        break;
+    case AV_NACK1:
+        action = ACTION_NACK2;
+        break;
+    case AV_ACK2:
+    case AV_NACK2:
         // Odd parity over zero bits is 1
         flags |= FLAG_PARITY;
 
@@ -353,15 +360,9 @@ ISR(TIM0_COMPA_vect_do_work)
             break;
 
         if (!(flags & FLAG_PARITY)) {
-            if (flags & FLAG_ACK_LOW)
-                action = ACTION_ACK_LOW;
-            else
-                action = ACTION_ACK_HIGH;
+            action = ACTION_ACK1;
         } else {
-            if (flags & FLAG_ACK_LOW)
-                action = ACTION_NACK_HIGH;
-            else
-                action = ACTION_NACK_LOW;
+            action = ACTION_NACK1;
         }
 
         break;
@@ -466,11 +467,9 @@ void setup(void)
 void loop(void)
 {
     if (action == ACTION_STALL) {
-        flags |= FLAG_ACK_LOW;
         // Done receiving or sending a byte
         switch(state) {
         case STATE_READ_ADDRESS:
-            flags &= ~FLAG_ACK_LOW;
             if (byte_buf == BC_CMD_ENUMERATE) {
                 state = STATE_ENUMERATE;
                 flags = FLAG_SEND | FLAG_CHECK_COLLISION;
@@ -550,7 +549,6 @@ void loop(void)
             action = ACTION_READY;
             break;
         case STATE_ENUMERATE:
-            flags &= ~FLAG_ACK_LOW;
             if (next_byte == ID_OFFSET + ID_SIZE) {
                 // Entire address sent
                 if (flags & FLAG_MUTE) {

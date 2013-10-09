@@ -75,14 +75,35 @@ bool bp_read_ready() {
     return false;
 }
 
+bool bp_read_ack_nack() {
+    bool ack = false, nack = false;
+    // Acks are sent as 01, nacks as 10. Since the 0 is dominant during
+    // a bus conflict, a reading of 00 means both an ack and a nack was
+    // sent.
+    if (bp_read_bit() == LOW)
+        ack = true;
+    if (bp_read_bit() == LOW)
+        nack = true;
+
+    if (nack) {
+        Serial.println("NAK received");
+        return false;
+    }
+
+    if (!ack) {
+        Serial.println("No ACK received");
+        return false;
+    }
+
+    return true;
+}
+
 enum {
     DONT_WAIT_READY = 1,
     NO_PARITY = 2,
-    ACK_HIGH = 4,
 };
 
 bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
-    uint8_t ack = (flags & ACK_HIGH) ? HIGH : LOW;
     uint8_t i = 8;
     bool parity_val = 1;
     *b = 0;
@@ -103,16 +124,10 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
             return false;
     }
 
-    if (bp_read_bit() != ack) {
-        Serial.println("NAK received");
-        return false;
-    }
-
-    return true;
+    return bp_read_ack_nack();
 }
 
 bool bp_write_byte(uint8_t b, uint8_t flags = 0){
-    uint8_t ack = (flags & ACK_HIGH) ? HIGH : LOW;
     uint8_t i = 8;
     bool parity_val= 1;
     while (i--) {
@@ -127,32 +142,26 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
         if(!bp_read_ready())
             return false;
 
-    if (bp_read_bit() != ack) {
-        Serial.println("NAK received");
-        return false;
-    }
-    return true;
+    return bp_read_ack_nack();
 }
 
 bool bp_scan() {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(0xaa, ACK_HIGH);
+    ok = ok && bp_write_byte(0xaa);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = 0;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
-            ok = bp_read_byte(&id[i], ACK_HIGH);
+            ok = bp_read_byte(&id[i]);
         }
 
-        if (!ok)
-            break;
-
-        if (id[0] == 0xff && id[1] == 0xff && id[2] == 0xff && id[3] == 0xff) {
-            // No device replied, we found them all
+        if (!ok) {
+            // Parity error, or no devices left (i.e. no ACK received)
             break;
         }
+
         Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(" found with id: ");
         for (uint8_t i = 0; i < sizeof(id); ++i) {
             if (id[i] < 0x10) Serial.print("0");
@@ -169,7 +178,7 @@ bool bp_scan() {
 bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(addr, ACK_HIGH);
+    ok = ok && bp_write_byte(addr);
     ok = ok && bp_write_byte(0x01);
     ok = ok && bp_write_byte(offset);
     while (ok && len--)
@@ -180,7 +189,7 @@ bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(addr, ACK_HIGH);
+    ok = ok && bp_write_byte(addr);
     ok = ok && bp_write_byte(0x02);
     ok = ok && bp_write_byte(offset);
     while (ok && len--) {
