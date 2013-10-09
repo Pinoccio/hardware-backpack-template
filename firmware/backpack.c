@@ -221,30 +221,6 @@ ISR(INT0_vect_do_work)
     MCUCR |= (1<<ISC01);
     set_sleep_mode(SLEEP_MODE_IDLE);
 
-    if (action == ACTION_SEND) {
-        bool val;
-        if (next_bit) {
-            val = (byte_buf & next_bit);
-        } else {
-            // next_bit == 0 means to send the parity bit
-            val = (flags & FLAG_PARITY);
-        }
-
-        if (!val) {
-            action = ACTION_SEND_LOW;
-        } else if (flags & FLAG_CHECK_COLLISION) {
-            action = ACTION_SEND_HIGH_CHECK_COLLISION;
-            flags ^= FLAG_PARITY;
-        } else {
-            action = ACTION_SEND_HIGH;
-            flags ^= FLAG_PARITY;
-        }
-    }
-
-    /* Don't bother doing either of these when we're muted */
-    if (flags & FLAG_MUTE)
-        action &= ~(AF_LINE_LOW | AF_SAMPLE);
-
     if ((action & AF_LINE_LOW)) {
         // Pull the line low and schedule a timer to release it again
         OCR0A = DATA_WRITE;
@@ -343,7 +319,25 @@ ISR(TIM0_COMPA_vect_do_work)
 
         // Send next bit, or parity bit
         next_bit <<= 1;
-        action = ACTION_SEND;
+
+        bool val;
+prepare_next_bit:
+        if (next_bit) {
+            val = (byte_buf & next_bit);
+        } else {
+            // next_bit == 0 means to send the parity bit
+            val = (flags & FLAG_PARITY);
+        }
+
+        if (!val) {
+            action = ACTION_SEND_LOW;
+        } else if (flags & FLAG_CHECK_COLLISION) {
+            action = ACTION_SEND_HIGH_CHECK_COLLISION;
+            flags ^= FLAG_PARITY;
+        } else {
+            action = ACTION_SEND_HIGH;
+            flags ^= FLAG_PARITY;
+        }
         break;
     case AV_ACK1:
         action = ACTION_ACK2;
@@ -355,16 +349,18 @@ ISR(TIM0_COMPA_vect_do_work)
     case AV_NACK2:
         // Odd parity over zero bits is 1
         flags |= FLAG_PARITY;
+        next_bit = 1;
 
         if (flags & FLAG_IDLE) {
             action = ACTION_IDLE;
         } else if (flags & FLAG_SEND) {
-            action = ACTION_SEND;
+            // Set up the first bit
+            goto prepare_next_bit;
         } else {
             action = ACTION_RECEIVE;
             byte_buf = 0;
         }
-        next_bit = 1;
+
         break;
 
     case AV_READY:
@@ -382,6 +378,10 @@ ISR(TIM0_COMPA_vect_do_work)
 
         break;
     }
+
+    // Don't bother doing either of these when we're muted
+    if (flags & FLAG_MUTE)
+        action &= ~(AF_LINE_LOW | AF_SAMPLE);
 
     // Disable this timer interrupt
     TIMSK0 &= ~(1 << OCIE0A);
