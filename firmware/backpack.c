@@ -307,16 +307,24 @@ ISR(TIM0_COMPA_vect_do_work)
     case AV_RECEIVE:
         // Read and store bit value
         if (sample_val & (1 << PINB1)) {
+            // When reading the parity bit, next_bit is 0 and this is a
+            // no-op
             byte_buf |= next_bit;
+            // Toggle the parity flag on every 1 received, including the
+            // parity bit
             flags ^= FLAG_PARITY;
         }
+
         if (next_bit) {
             next_bit <<= 1;
-        } else if (flags & FLAG_PARITY) {
-            action = ACTION_READY;
-            flags |= FLAG_IDLE;
         } else {
-            action = ACTION_STALL;
+            // Full byte and parity bit received
+            if (flags & FLAG_PARITY) {
+                action = ACTION_READY;
+                flags |= FLAG_IDLE;
+            } else {
+                action = ACTION_STALL;
+            }
         }
         break;
     case AV_SEND:
@@ -328,13 +336,14 @@ ISR(TIM0_COMPA_vect_do_work)
             flags |= FLAG_MUTE;
         }
 
-        if (next_bit) {
-            // Send next bit, or parity bit
-            next_bit <<= 1;
-            action = ACTION_SEND;
-        } else {
+        if (!next_bit) {
             action = ACTION_STALL;
+            break;
         }
+
+        // Send next bit, or parity bit
+        next_bit <<= 1;
+        action = ACTION_SEND;
         break;
     case AV_ACK1:
         action = ACTION_ACK2;
