@@ -553,10 +553,10 @@ void loop(void)
                 state = STATE_ENUMERATE;
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
-                // Don't change out of STALL, let the next iteration
-                // prepare the first byte
                 next_byte = ID_OFFSET;
                 bus_addr = 0;
+                // Don't change out of STALL, let the next iteration
+                // prepare the first byte
             } else if (byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
@@ -571,8 +571,8 @@ void loop(void)
             // command
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
-                    action = ACTION_READY;
                     state = STATE_READ_EEPROM_RECEIVE_ADDR;
+                    action = ACTION_READY;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_RECEIVE_ADDR;
@@ -597,8 +597,8 @@ void loop(void)
             // We're running CMD_WRITE_EEPROM and just received the
             // EEPROM address to write
             next_byte = byte_buf;
-            action = ACTION_READY;
             state = STATE_WRITE_EEPROM_RECEIVE_DATA;
+            action = ACTION_READY;
             break;
         case STATE_WRITE_EEPROM_RECEIVE_DATA:
             // Write the byte received, but refuse to write our id
@@ -623,8 +623,8 @@ void loop(void)
                     // so claim the current bus address and stop
                     // paying attention
                     state = STATE_IDLE;
-                    action = ACTION_READY;
                     flags |= FLAG_IDLE;
+                    action = ACTION_READY;
                     break;
                 }
             }
