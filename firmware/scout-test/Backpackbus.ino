@@ -85,17 +85,16 @@ bool bp_read_ack_nack() {
     if (bp_read_bit() == LOW)
         nack = true;
 
-    if (nack) {
+    if (nack && ack)
+        Serial.println("Both ACK and NAK received");
+    else if (nack)
         Serial.println("NAK received");
-        return false;
-    }
-
-    if (!ack) {
+    else if (!ack)
         Serial.println("No ACK received");
-        return false;
-    }
+    else
+        return true;
 
-    return true;
+    return false;
 }
 
 enum {
