@@ -143,6 +143,9 @@ enum {
     FLAG_MUTE = 1,
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
+    // If this flag is set, the slave has completed bus enumeration
+    // succesfully and the bus address in bus_addr is valid.
+    FLAG_ENUMERATED = 4,
     // If this flag is set, during any high bits sent the slave will
     // check the bus for collision (e.g., when another slave is sending
     // a low bit). If collision is detected, FLAG_MUTE is set.
@@ -454,7 +457,9 @@ ISR(TIM0_OVF_vect)
         // bit, but we're skipping that after a reset.
         byte_buf = 0;
         next_bit = 0x80;
-        flags = 0;
+
+        // Clear all flags, except for the enumeration status
+        flags &= FLAG_ENUMERATED;
     } else {
         // Since it seems the bus is idle, let's power down instead of
         // only sleeping. Since we can only wake up from powerdown on a
@@ -553,11 +558,12 @@ void loop(void)
                 state = STATE_ENUMERATE;
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
+                flags &= ~FLAG_ENUMERATED;
                 next_byte = ID_OFFSET;
                 bus_addr = 0;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
-            } else if (byte_buf == bus_addr) {
+            } else if ((flags & FLAG_ENUMERATED) && byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
                 state = STATE_RECEIVE_COMMAND;
@@ -624,6 +630,7 @@ void loop(void)
                     // paying attention
                     state = STATE_IDLE;
                     flags |= FLAG_IDLE;
+                    flags |= FLAG_ENUMERATED;
                     action = ACTION_READY;
                     break;
                 }
