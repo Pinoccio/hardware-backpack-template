@@ -173,7 +173,11 @@ register uint8_t next_byte asm("r4");
 register uint8_t bus_addr asm("r5");
 register uint8_t flags asm("r6");
 
+// The action to take for the next or current bit
 register uint8_t action asm("r7");
+
+// The higher level protocol state. Only valid when
+// action != ACTION_IDLE.
 register uint8_t state asm("r8");
 
 register uint8_t timera_action asm("r9");
@@ -560,7 +564,6 @@ void loop(void)
             } else {
                 // We're not addressed, stop paying attention
                 action = ACTION_IDLE;
-                state = STATE_IDLE;
             }
             break;
         case STATE_RECEIVE_COMMAND:
@@ -578,7 +581,6 @@ void loop(void)
                 default:
                     // Unknown command
                     action = ACTION_IDLE;
-                    state = STATE_IDLE;
                     break;
             }
             break;
