@@ -61,6 +61,7 @@ uint8_t bp_read_bit() {
     // slave), but don't wait forever.
     uint8_t timeout = 255;
     while(digitalRead(BP_BUS_PIN) == LOW && timeout--);
+    if (!timeout) Serial.println("Bus timeout!");
     delayMicroseconds(IDLE_DELAY);
     return value;
 }
