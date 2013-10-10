@@ -191,7 +191,7 @@ register uint8_t sample_val asm("r16");
 // Register that is _always_ zero (unlike r1 which is intended to be
 // usually zero, but might be changed by some instructions so can't be
 // relied upon to be zero in an interrupt handler
-register uint8_t global_zero asm("r17");
+register uint8_t tcnt0_init asm("r17");
 
 #define INT0_vect_do_work EXPAND_AND_CONCAT(INT0_vect, _do_work)
 
@@ -204,7 +204,7 @@ register uint8_t global_zero asm("r17");
 // and thus saved, in the ISR).
 ISR(INT0_vect, ISR_NAKED) {
     // Reset the TCNT0 register.
-    asm("out %0, %1" : : "I"(_SFR_IO_ADDR(TCNT0)), "r"(global_zero));
+    asm("out %0, %1" : : "I"(_SFR_IO_ADDR(TCNT0)), "r"(tcnt0_init));
 
     // Jump to INT0_vect_do_work, which will handle the real saving of
     // registers
@@ -223,10 +223,10 @@ ISR(INT0_vect_do_work)
 
     // Clear any interrupt flags that might have been set while the
     // timer interrupts were disabled
-    TIFR0 = (1 << OCF0B) | (1 << OCF0A);
+    TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
 
-    // Always enable the OCR0B interrupt to detect a reset pulse
-    TIMSK0 |=  (1 << OCIE0B);
+    // Always enable the OVF interrupt to detect a reset pulse
+    TIMSK0 |=  (1 << TOIE0);
 
     // If we were powered-down, we'll have been set to a
     // level-triggered interrupt instead of an edge-triggered one,
@@ -243,13 +243,13 @@ ISR(INT0_vect_do_work)
         action &= ~(AF_LINE_LOW | AF_SAMPLE);
 
     if ((action & AF_LINE_LOW)) {
-        // Pull the line low and schedule a timer to release it again
-        OCR0A = DATA_WRITE;
+        // Pull the line low and enable a timer to release it again
         DDRB |= (1 << PINB1);
-        TIMSK0 |=  (1 << OCIE0A);
-    } else if (action & AF_SAMPLE) {
+        TIMSK0 |=  (1 << OCIE0B);
+    }
+
+    if (action & AF_SAMPLE) {
         // Schedule a timer to sample the line
-        OCR0A = DATA_SAMPLE;
         TIMSK0 |=  (1 << OCIE0A);
     } else {
         // If the only thing that needs to happen in the timer handler
@@ -274,6 +274,23 @@ ISR(INT0_vect_do_work)
     }
 }
 
+ISR(TIM0_COMPB_vect, ISR_NAKED)
+{
+    // Release bus
+    asm("cbi %0, %1"   : : "I"(_SFR_IO_ADDR(DDRB)), "I"(PINB1));
+    // Disable this timer interupt
+    asm("push r24");
+    asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(SREG)));
+    asm("push r24");
+    asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(TIMSK0)));
+    asm("andi r24, %0" : : "I"(OCIE0B));
+    asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(TIMSK0)));
+    asm("pop r24");
+    asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(SREG)));
+    asm("pop r24");
+    asm("reti");
+}
+
 #define TIM0_COMPA_vect_do_work EXPAND_AND_CONCAT(TIM0_COMPA_vect, _do_work)
 
 // This is the naked ISR that is called on TIM0_COMPA interrupts. It
@@ -286,8 +303,6 @@ ISR(INT0_vect_do_work)
 // ISR).
 ISR(TIM0_COMPA_vect, ISR_NAKED)
 {
-    // Release bus
-    asm("cbi %0, %1" : : "I"(_SFR_IO_ADDR(DDRB)), "I"(PINB1));
     // Sample bus (and all other pins at the same time). Use a global
     // register variable to store the value, so we don't need to save
     // some register's value and restore it below...
@@ -421,7 +436,7 @@ prepare_next_bit:
     TIMSK0 &= ~(1 << OCIE0A);
 }
 
-ISR(TIM0_COMPB_vect)
+ISR(TIM0_OVF_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
     if (!val) {
@@ -447,7 +462,7 @@ ISR(TIM0_COMPB_vect)
     }
 
     // Disable this timer interrupt
-    TIMSK0 &= ~(1 << OCIE0B);
+    TIMSK0 &= ~(1 << TOIE0);
 }
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
@@ -491,15 +506,18 @@ void __attribute__((noinline)) loop(void);
 
 void setup(void)
 {
-    global_zero = 0;
     bus_addr = 0xff;
     action = ACTION_IDLE;
     // Set ports to output for debug
     PORTB = DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
 
-    // OCR0B interrupt is always used for a reset, so set a fixed
-    // compare value. OCR0A timeout depends on the context.
-    OCR0B = RESET_SAMPLE;
+    // On an INT0 interrupt, the counter is reset to tcnt_init, so it
+    // overflows after RESET_SAMPLE ticks. OCR0A and OCR0B are set so
+    // their interrupts fire after DATA_SAMPLE and DATA_RELEASE ticks
+    // respectively
+    tcnt0_init = (0xff - RESET_SAMPLE);
+    OCR0B = tcnt0_init + DATA_WRITE;
+    OCR0A = tcnt0_init + DATA_SAMPLE;
 
     // Enable INT0 interrupt
     GIMSK=(1<<INT0);
