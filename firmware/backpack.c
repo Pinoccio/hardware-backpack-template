@@ -92,8 +92,13 @@ enum {
     ACTION_MASK = 0xf,
 
     // These are action flags that can be combined with the above values
+
+    // This action needs to sample the bit value
     AF_SAMPLE = 0x80,
+    // This action needs to pull the line low
     AF_LINE_LOW = 0x40,
+    // When FLAG_MUTE is set, the AF_SAMPLE and AF_LINE_LOW bits should
+    // be ignored for this bit
     AF_MUTE = 0x20,
 
     // These are the complete values (action value plus any relevant
@@ -134,9 +139,17 @@ enum {
 };
 
 enum {
+    // When this flag is set, this slave will no longer participate on
+    // the bus, but it will still keep its state synchronized. This is
+    // used during bus enumeration, when this slave has "lost" a
+    // conflict and needs to wait out the current enumeration round
+    // before trying to send its id again.
     FLAG_MUTE = 1,
     // The (odd) parity bit for all bits sent or received so far
     FLAG_PARITY = 2,
+    // If this flag is set, during any high bits sent the slave will
+    // check the bus for collision (e.g., when another slave is sending
+    // a low bit). If collision is detected, FLAG_MUTE is set.
     FLAG_CHECK_COLLISION = 8,
     // After the ACK/NACK bit, switch to the send action and start
     // sending the byte in byte_buf. Only considered when FLAG_IDLE is
@@ -304,9 +317,12 @@ ISR(TIM0_COMPA_vect_do_work)
         } else {
             // Full byte and parity bit received
             if (flags & FLAG_PARITY) {
+                // Parity is not ok, skip the STALL state and go
+                // straight to ready (and NACK and IDLE after that)
                 action = ACTION_READY;
                 flags |= FLAG_IDLE;
             } else {
+                // Parity is ok, let the mainloop decide what to do next
                 action = ACTION_STALL;
             }
         }
@@ -321,6 +337,7 @@ ISR(TIM0_COMPA_vect_do_work)
         }
 
         if (!next_bit) {
+            // Just sent the parity bit
             action = ACTION_STALL;
             break;
         }
@@ -331,6 +348,7 @@ ISR(TIM0_COMPA_vect_do_work)
         bool val;
 prepare_next_bit:
         if (next_bit) {
+            // Send the next bit
             val = (byte_buf & next_bit);
         } else {
             // next_bit == 0 means to send the parity bit
@@ -338,11 +356,14 @@ prepare_next_bit:
         }
 
         if (!val) {
+            // Pull the line low
             action = ACTION_SEND_LOW;
         } else if (flags & FLAG_CHECK_COLLISION) {
+            // Leave the line high, but check for collision
             action = ACTION_SEND_HIGH_CHECK_COLLISION;
             flags ^= FLAG_PARITY;
         } else {
+            // Just leave the line high
             action = ACTION_SEND_HIGH;
             flags ^= FLAG_PARITY;
         }
@@ -355,13 +376,16 @@ prepare_next_bit:
         break;
     case AV_ACK2:
     case AV_NACK2:
-        // Odd parity over zero bits is 1
+        // Prepare for sending or receiving the next byte (or go to
+        // idle, but next_bit won't matter anyway).
         flags |= FLAG_PARITY;
         next_bit = 1;
 
+        // Clear FLAG_MUTE when requested
         if (flags & FLAG_CLEAR_MUTE)
             flags &= ~(FLAG_MUTE | FLAG_CLEAR_MUTE);
 
+        // Decide upon the next action, IDLE, SEND or RECEIVE.
         if (flags & FLAG_IDLE) {
             action = ACTION_IDLE;
         } else if (flags & FLAG_SEND) {
@@ -382,8 +406,11 @@ prepare_next_bit:
             break;
 
         if (!(flags & FLAG_PARITY)) {
+            // Parity was ok
             action = ACTION_ACK1;
         } else {
+            // Parity didn't check out when receiving, or main loop
+            // intentionally broke it
             action = ACTION_NACK1;
         }
 
@@ -402,10 +429,16 @@ ISR(TIM0_COMPB_vect)
         // state we were in previously!)
         state = STATE_READ_ADDRESS;
         action = ACTION_RECEIVE;
+        // These are normally initialized after sending the ack/nack
+        // bit, but we're skipping that after a reset.
         byte_buf = 0;
         next_bit = 1;
         flags = FLAG_PARITY;
     } else {
+        // Since it seems the bus is idle, let's power down instead of
+        // only sleeping. Since we can only wake up from powerdown on a
+        // low-level triggered interrupt, we can only go into powerdown
+        // when the bus is high.
         set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 
         // Make INT0 low-level triggered (note that this assumes ISC00
@@ -492,6 +525,8 @@ void loop(void)
         // Done receiving or sending a byte
         switch(state) {
         case STATE_READ_ADDRESS:
+            // Read the first byte after a reset, which is either a
+            // broadcast command or a bus address
             if (byte_buf == BC_CMD_ENUMERATE) {
                 state = STATE_ENUMERATE;
                 flags = FLAG_SEND | FLAG_CHECK_COLLISION;
@@ -513,6 +548,8 @@ void loop(void)
             }
             break;
         case STATE_READ_COMMAND:
+            // We were addressed and the master has just sent us a
+            // command
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
@@ -532,13 +569,17 @@ void loop(void)
             }
             break;
         case STATE_READ_EEPROM_ADDR:
+            // We're running CMD_READ_EEPROM and just received the
+            // EEPROM addres to read from
             next_byte = byte_buf;
             flags |= FLAG_SEND;
+            state = STATE_READ_EEPROM_READ;
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
-            state = STATE_READ_EEPROM_READ;
             break;
         case STATE_WRITE_EEPROM_ADDR:
+            // We're running CMD_WRITE_EEPROM and just received the
+            // EEPROM address to write
             next_byte = byte_buf;
             flags &= ~FLAG_SEND;
             action = ACTION_READY;
@@ -548,8 +589,6 @@ void loop(void)
             // Write the byte received, but refuse to write our id
             if (next_byte < ID_OFFSET || next_byte >= ID_OFFSET + ID_SIZE)
                 EEPROM_write(next_byte, byte_buf);
-            // Advance to the next byte (even when we refused to
-            // write).
             next_byte++;
             action = ACTION_READY;
             break;
@@ -574,7 +613,7 @@ void loop(void)
                     break;
                 }
             }
-            /* FALLTHROUGH */
+            // FALLTHROUGH
         case STATE_READ_EEPROM_READ:
             // Read and send next EEPROM byte (but don't bother while
             // we're muted)
