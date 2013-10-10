@@ -509,7 +509,7 @@ void loop(void)
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
-                    flags &= ~ACTION_SEND;
+                    flags &= ~FLAG_SEND;
                     state = STATE_READ_EEPROM_ADDR;
                     break;
                 case CMD_WRITE_EEPROM:
