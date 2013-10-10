@@ -313,7 +313,7 @@ ISR(TIM0_COMPA_vect_do_work)
         }
 
         if (next_bit) {
-            next_bit <<= 1;
+            next_bit >>= 1;
         } else {
             // Full byte and parity bit received
             if (flags & FLAG_PARITY) {
@@ -343,7 +343,7 @@ ISR(TIM0_COMPA_vect_do_work)
         }
 
         // Send next bit, or parity bit
-        next_bit <<= 1;
+        next_bit >>= 1;
 
         bool val;
 prepare_next_bit:
@@ -379,7 +379,7 @@ prepare_next_bit:
         // Prepare for sending or receiving the next byte (or go to
         // idle, but next_bit won't matter anyway).
         flags &= ~FLAG_PARITY;
-        next_bit = 1;
+        next_bit = 0x80;
 
         // Clear FLAG_MUTE when requested
         if (flags & FLAG_CLEAR_MUTE)
@@ -432,7 +432,7 @@ ISR(TIM0_COMPB_vect)
         // These are normally initialized after sending the ack/nack
         // bit, but we're skipping that after a reset.
         byte_buf = 0;
-        next_bit = 1;
+        next_bit = 0x80;
         flags = 0;
     } else {
         // Since it seems the bus is idle, let's power down instead of

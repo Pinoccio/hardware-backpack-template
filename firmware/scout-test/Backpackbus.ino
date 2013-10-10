@@ -103,14 +103,15 @@ enum {
 };
 
 bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
-    uint8_t i = 8;
     bool parity_val = 0;
     *b = 0;
-    while (i--) {
-        *b >>= 1;
-        *b |= (bp_read_bit() ? 0x80 : 0);
-        if (*b & 0x80)
+    uint8_t next_bit = 0x80;
+    while (next_bit) {
+        if (bp_read_bit()) {
+            *b |= next_bit;
             parity_val ^= 1;
+        }
+        next_bit >>= 1;
     }
     if (!(flags & NO_PARITY)) {
         if (bp_read_bit() != parity_val) {
@@ -127,12 +128,13 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
 }
 
 bool bp_write_byte(uint8_t b, uint8_t flags = 0){
-    uint8_t i = 8;
     bool parity_val = 0;
-    while (i--) {
-        parity_val ^= (b & 1);
-        bp_write_bit(b & 1);
-        b >>= 1;
+    uint8_t next_bit = 0x80;
+    while (next_bit) {
+        if (b & next_bit)
+            parity_val ^= 1;
+        bp_write_bit(b & next_bit);
+        next_bit >>= 1;
     }
     if (!(flags & NO_PARITY)) {
         bp_write_bit(parity_val);
