@@ -122,20 +122,20 @@ enum {
 enum {
     // Idle - Waiting for the next reset to participate (again)
     STATE_IDLE,
-    // Bus was reset, reading the address byte (or broadcast command)
-    STATE_READ_ADDRESS,
+    // Bus was reset, receiving the address byte (or broadcast command)
+    STATE_RECEIVE_ADDRESS,
     // BC_CMD_ENUMERATE received, bus enumeration in progress
     STATE_ENUMERATE,
     // We are adressed, receiving targeted command
-    STATE_READ_COMMAND,
+    STATE_RECEIVE_COMMAND,
     // CMD_READ_EEPROM received, now receiving read address
-    STATE_READ_EEPROM_ADDR,
+    STATE_READ_EEPROM_RECEIVE_ADDR,
     // CMD_READ_EEPROM and read address received, now reading
-    STATE_READ_EEPROM_READ,
+    STATE_READ_EEPROM_SEND_DATA,
     // CMD_WRITE_EEPROM received, now receiving write address
-    STATE_WRITE_EEPROM_ADDR,
+    STATE_WRITE_EEPROM_RECEIVE_ADDR,
     // CMD_WRITE_EEPROM and write address received, now writing
-    STATE_WRITE_EEPROM_WRITE,
+    STATE_WRITE_EEPROM_RECEIVE_DATA,
 };
 
 enum {
@@ -427,7 +427,7 @@ ISR(TIM0_COMPB_vect)
     if (!val) {
         // Bus is still low, this is a reset pulse (regardless of what
         // state we were in previously!)
-        state = STATE_READ_ADDRESS;
+        state = STATE_RECEIVE_ADDRESS;
         action = ACTION_RECEIVE;
         // These are normally initialized after sending the ack/nack
         // bit, but we're skipping that after a reset.
@@ -524,7 +524,7 @@ void loop(void)
     if (action == ACTION_STALL) {
         // Done receiving or sending a byte
         switch(state) {
-        case STATE_READ_ADDRESS:
+        case STATE_RECEIVE_ADDRESS:
             // Read the first byte after a reset, which is either a
             // broadcast command or a bus address
             if (byte_buf == BC_CMD_ENUMERATE) {
@@ -540,24 +540,24 @@ void loop(void)
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
                 flags &= ~FLAG_SEND;
-                state = STATE_READ_COMMAND;
+                state = STATE_RECEIVE_COMMAND;
             } else {
                 // We're not addressed, stop paying attention
                 action = ACTION_IDLE;
                 state = STATE_IDLE;
             }
             break;
-        case STATE_READ_COMMAND:
+        case STATE_RECEIVE_COMMAND:
             // We were addressed and the master has just sent us a
             // command
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
                     flags &= ~FLAG_SEND;
-                    state = STATE_READ_EEPROM_ADDR;
+                    state = STATE_READ_EEPROM_RECEIVE_ADDR;
                     break;
                 case CMD_WRITE_EEPROM:
-                    state = STATE_WRITE_EEPROM_ADDR;
+                    state = STATE_WRITE_EEPROM_RECEIVE_ADDR;
                     action = ACTION_READY;
                     flags &= ~FLAG_SEND;
                     break;
@@ -568,24 +568,24 @@ void loop(void)
                     break;
             }
             break;
-        case STATE_READ_EEPROM_ADDR:
+        case STATE_READ_EEPROM_RECEIVE_ADDR:
             // We're running CMD_READ_EEPROM and just received the
             // EEPROM addres to read from
             next_byte = byte_buf;
             flags |= FLAG_SEND;
-            state = STATE_READ_EEPROM_READ;
+            state = STATE_READ_EEPROM_SEND_DATA;
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
             break;
-        case STATE_WRITE_EEPROM_ADDR:
+        case STATE_WRITE_EEPROM_RECEIVE_ADDR:
             // We're running CMD_WRITE_EEPROM and just received the
             // EEPROM address to write
             next_byte = byte_buf;
             flags &= ~FLAG_SEND;
             action = ACTION_READY;
-            state = STATE_WRITE_EEPROM_WRITE;
+            state = STATE_WRITE_EEPROM_RECEIVE_DATA;
             break;
-        case STATE_WRITE_EEPROM_WRITE:
+        case STATE_WRITE_EEPROM_RECEIVE_DATA:
             // Write the byte received, but refuse to write our id
             if (next_byte < ID_OFFSET || next_byte >= ID_OFFSET + ID_SIZE)
                 EEPROM_write(next_byte, byte_buf);
@@ -614,7 +614,7 @@ void loop(void)
                 }
             }
             // FALLTHROUGH
-        case STATE_READ_EEPROM_READ:
+        case STATE_READ_EEPROM_SEND_DATA:
             // Read and send next EEPROM byte (but don't bother while
             // we're muted)
             if (!(flags & FLAG_MUTE))
