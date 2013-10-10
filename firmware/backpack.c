@@ -144,6 +144,9 @@ enum {
     FLAG_SEND = 32,
     // After the ACK/NACK bit, switch to idle and drop off the bus
     FLAG_IDLE = 64,
+    // After sending the ACK/NACK bit, clear FLAG_MUTE and
+    // FLAG_CLEAR_MUTE
+    FLAG_CLEAR_MUTE = 128,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -356,6 +359,9 @@ prepare_next_bit:
         flags |= FLAG_PARITY;
         next_bit = 1;
 
+        if (flags & FLAG_CLEAR_MUTE)
+            flags &= ~(FLAG_MUTE | FLAG_CLEAR_MUTE);
+
         if (flags & FLAG_IDLE) {
             action = ACTION_IDLE;
         } else if (flags & FLAG_SEND) {
@@ -555,7 +561,9 @@ void loop(void)
                     // on the next round
                     next_byte = ID_OFFSET;
                     bus_addr++;
-                    flags &= ~FLAG_MUTE;
+                    // Stop muting _after_ sending the ack/nack bit for
+                    // the current (last) byte
+                    flags |= FLAG_CLEAR_MUTE;
                 } else {
                     // We have the lowest id sent during this round,
                     // so claim the current bus address and stop
