@@ -94,6 +94,7 @@ enum {
     // These are action flags that can be combined with the above values
     AF_SAMPLE = 0x80,
     AF_LINE_LOW = 0x40,
+    AF_MUTE = 0x20,
 
     // These are the complete values (action value plus any relevant
     // action flags). The action global variable is always set to one of
@@ -101,14 +102,14 @@ enum {
     ACTION_IDLE = AV_IDLE,
     ACTION_STALL = AV_STALL | AF_LINE_LOW,
     ACTION_SEND = AV_SEND,
-    ACTION_SEND_HIGH = AV_SEND,
-    ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW,
-    ACTION_SEND_HIGH_CHECK_COLLISION = AV_SEND | AF_SAMPLE,
+    ACTION_SEND_HIGH = AV_SEND | AF_MUTE,
+    ACTION_SEND_LOW = AV_SEND | AF_LINE_LOW | AF_MUTE,
+    ACTION_SEND_HIGH_CHECK_COLLISION = AV_SEND | AF_SAMPLE | AF_MUTE,
     ACTION_RECEIVE = AV_RECEIVE | AF_SAMPLE,
-    ACTION_ACK1 = AV_ACK1 | AF_LINE_LOW,
-    ACTION_ACK2 = AV_ACK2,
-    ACTION_NACK1 = AV_NACK1,
-    ACTION_NACK2 = AV_NACK2 | AF_LINE_LOW,
+    ACTION_ACK1 = AV_ACK1 | AF_LINE_LOW | AF_MUTE,
+    ACTION_ACK2 = AV_ACK2 | AF_MUTE,
+    ACTION_NACK1 = AV_NACK1 | AF_MUTE,
+    ACTION_NACK2 = AV_NACK2 | AF_LINE_LOW | AF_MUTE,
     ACTION_READY = AV_READY | AF_SAMPLE,
 };
 
@@ -380,7 +381,7 @@ prepare_next_bit:
     }
 
     // Don't bother doing either of these when we're muted
-    if (flags & FLAG_MUTE)
+    if ((flags & FLAG_MUTE) && (action & AF_MUTE))
         action &= ~(AF_LINE_LOW | AF_SAMPLE);
 
     // Disable this timer interrupt
