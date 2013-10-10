@@ -51,9 +51,9 @@ uint8_t const ID_SIZE = 4;
 // Size of the unique ID
 uint8_t const ID_OFFSET = 0;
 
+// Protocol timings
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
 #define RESET_SAMPLE US_TO_CLOCKS(1400)
-//#define START_DELAY US_TO_CLOCKS(32)
 #define DATA_WRITE US_TO_CLOCKS(600)
 #define DATA_SAMPLE US_TO_CLOCKS(300)
 
