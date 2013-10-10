@@ -378,7 +378,7 @@ prepare_next_bit:
     case AV_NACK2:
         // Prepare for sending or receiving the next byte (or go to
         // idle, but next_bit won't matter anyway).
-        flags |= FLAG_PARITY;
+        flags &= ~FLAG_PARITY;
         next_bit = 1;
 
         // Clear FLAG_MUTE when requested
@@ -433,7 +433,7 @@ ISR(TIM0_COMPB_vect)
         // bit, but we're skipping that after a reset.
         byte_buf = 0;
         next_bit = 1;
-        flags = FLAG_PARITY;
+        flags = 0;
     } else {
         // Since it seems the bus is idle, let's power down instead of
         // only sleeping. Since we can only wake up from powerdown on a

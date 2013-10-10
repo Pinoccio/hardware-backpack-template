@@ -104,7 +104,7 @@ enum {
 
 bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
     uint8_t i = 8;
-    bool parity_val = 1;
+    bool parity_val = 0;
     *b = 0;
     while (i--) {
         *b >>= 1;
@@ -128,7 +128,7 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
 
 bool bp_write_byte(uint8_t b, uint8_t flags = 0){
     uint8_t i = 8;
-    bool parity_val= 1;
+    bool parity_val = 0;
     while (i--) {
         parity_val ^= (b & 1);
         bp_write_bit(b & 1);
