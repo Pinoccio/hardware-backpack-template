@@ -610,7 +610,7 @@ void loop(void)
         case STATE_READ_EEPROM_SEND_DATA:
             // Read and send next EEPROM byte (but don't bother while
             // we're muted)
-            if (!(flags & FLAG_MUTE))
+            if (!(flags & FLAG_MUTE) || (flags & FLAG_CLEAR_MUTE))
                 byte_buf = EEPROM_read(next_byte);
             next_byte++;
 
