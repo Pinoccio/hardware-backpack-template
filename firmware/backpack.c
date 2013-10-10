@@ -222,6 +222,10 @@ ISR(INT0_vect_do_work)
     MCUCR |= (1<<ISC01);
     set_sleep_mode(SLEEP_MODE_IDLE);
 
+    // Don't bother doing either of these when we're muted
+    if ((flags & FLAG_MUTE) && (action & AF_MUTE))
+        action &= ~(AF_LINE_LOW | AF_SAMPLE);
+
     if ((action & AF_LINE_LOW)) {
         // Pull the line low and schedule a timer to release it again
         OCR0A = DATA_WRITE;
@@ -379,10 +383,6 @@ prepare_next_bit:
 
         break;
     }
-
-    // Don't bother doing either of these when we're muted
-    if ((flags & FLAG_MUTE) && (action & AF_MUTE))
-        action &= ~(AF_LINE_LOW | AF_SAMPLE);
 
     // Disable this timer interrupt
     TIMSK0 &= ~(1 << OCIE0A);
