@@ -23,10 +23,10 @@
 #define BP_BUS_PIN 2
 
 #define RESET_DELAY 2000
-#define START_DELAY 200
-#define VALUE_DELAY 450
-#define SAMPLE_DELAY 150
-#define IDLE_DELAY 200
+#define START_DELAY 100
+#define VALUE_DELAY 550
+#define SAMPLE_DELAY 250
+#define IDLE_DELAY 50
 
 void bp_reset() {
     pinMode(BP_BUS_PIN, OUTPUT);
