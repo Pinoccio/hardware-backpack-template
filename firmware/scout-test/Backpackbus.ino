@@ -98,11 +98,6 @@ bool bp_read_ack_nack() {
     return false;
 }
 
-enum {
-    DONT_WAIT_READY = 1,
-    NO_PARITY = 2,
-};
-
 bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
     bool parity_val = 0;
     *b = 0;
@@ -114,16 +109,13 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
         }
         next_bit >>= 1;
     }
-    if (!(flags & NO_PARITY)) {
-        if (bp_read_bit() != parity_val) {
-            Serial.println("Parity error");
-            return false;
-        }
+    if (bp_read_bit() != parity_val) {
+        Serial.println("Parity error");
+        return false;
     }
-    if (!(flags & DONT_WAIT_READY)) {
-        if(!bp_read_ready())
-            return false;
-    }
+
+    if(!bp_read_ready())
+        return false;
 
     return bp_read_ack_nack();
 }
@@ -137,12 +129,10 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
         bp_write_bit(b & next_bit);
         next_bit >>= 1;
     }
-    if (!(flags & NO_PARITY)) {
-        bp_write_bit(parity_val);
-    }
-    if (!(flags & DONT_WAIT_READY))
-        if(!bp_read_ready())
-            return false;
+    bp_write_bit(parity_val);
+
+    if(!bp_read_ready())
+        return false;
 
     return bp_read_ack_nack();
 }
