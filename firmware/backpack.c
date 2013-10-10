@@ -27,7 +27,15 @@
 //
 // Fuse settings are 0xff and 0x29:
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xff:m -U lfuse:w:0x29:m
-// TODO: Decide on brownout detection and watchdog timer
+//
+// TODO:
+//  - Decide on brownout detection and watchdog timer
+//  - In theory, a reset could happen when the main loop is processing
+//    something. Now, the main loop will happily overwrite the state set
+//    by the reset detection, but this should somehow be prevented
+//    (perhaps set just a reset flag in the OVF ISR and let the main
+//    loop do all of the other setup?)
+//  - Overview documentation
 
 // 4.8Mhz oscillator with CKDIV8 fuse set
 #define F_CPU (4800000/8)

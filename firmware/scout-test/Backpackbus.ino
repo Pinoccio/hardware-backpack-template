@@ -160,7 +160,12 @@ bool bp_scan() {
         }
 
         if (!ok) {
-            // Parity error, or no devices left (i.e. no ACK received)
+            // TODO: When no devices are left, a parity error occurs
+            // (because bus idle == all ones == parity error). This
+            // means it is not currently possible to tell the difference
+            // between a parity or other error and a completed
+            // enumeration. Assuming enumeration completed on every
+            // error is probably not a good idea...
             break;
         }
 
