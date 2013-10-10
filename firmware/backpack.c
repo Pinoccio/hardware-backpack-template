@@ -189,9 +189,10 @@ register uint8_t state asm("r8");
 // registers in an ISR
 register uint8_t sample_val asm("r16");
 
-// Register that is _always_ zero (unlike r1 which is intended to be
-// usually zero, but might be changed by some instructions so can't be
-// relied upon to be zero in an interrupt handler
+// Register that contains the reset value for TCNT0. By putting this
+// inside a register, the naked INT0 ISR can write it to TCNT0
+// immediately, without having to mess with freeing up a register and
+// loading the constant into it.
 register uint8_t tcnt0_init asm("r17");
 
 // This is the naked ISR that is called on INT0 interrupts. It
