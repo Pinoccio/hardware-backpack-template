@@ -493,9 +493,7 @@ void setup(void)
 {
     global_zero = 0;
     bus_addr = 0xff;
-    flags &= ~FLAG_MUTE;
     action = ACTION_IDLE;
-    state = STATE_IDLE;
     // Set ports to output for debug
     PORTB = DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
 
@@ -529,7 +527,6 @@ void loop(void)
             // broadcast command or a bus address
             if (byte_buf == BC_CMD_ENUMERATE) {
                 state = STATE_ENUMERATE;
-                flags = FLAG_SEND | FLAG_CHECK_COLLISION;
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
                 // Don't change out of STALL, let the next iteration
@@ -539,7 +536,6 @@ void loop(void)
             } else if (byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
                 action = ACTION_READY;
-                flags &= ~FLAG_SEND;
                 state = STATE_RECEIVE_COMMAND;
             } else {
                 // We're not addressed, stop paying attention
@@ -553,13 +549,11 @@ void loop(void)
             switch (byte_buf) {
                 case CMD_READ_EEPROM:
                     action = ACTION_READY;
-                    flags &= ~FLAG_SEND;
                     state = STATE_READ_EEPROM_RECEIVE_ADDR;
                     break;
                 case CMD_WRITE_EEPROM:
                     state = STATE_WRITE_EEPROM_RECEIVE_ADDR;
                     action = ACTION_READY;
-                    flags &= ~FLAG_SEND;
                     break;
                 default:
                     // Unknown command
@@ -581,7 +575,6 @@ void loop(void)
             // We're running CMD_WRITE_EEPROM and just received the
             // EEPROM address to write
             next_byte = byte_buf;
-            flags &= ~FLAG_SEND;
             action = ACTION_READY;
             state = STATE_WRITE_EEPROM_RECEIVE_DATA;
             break;
