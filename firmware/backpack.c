@@ -299,7 +299,7 @@ ISR(TIM0_COMPB_vect, ISR_NAKED)
     asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(SREG)));
     asm("push r24");
     asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(TIMSK0)));
-    asm("andi r24, %0" : : "I"(OCIE0B));
+    asm("andi r24, ~%0" : : "M"(1 << OCIE0B));
     asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(TIMSK0)));
     asm("pop r24");
     asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(SREG)));
