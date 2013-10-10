@@ -183,8 +183,6 @@ register uint8_t action asm("r7");
 // action != ACTION_IDLE.
 register uint8_t state asm("r8");
 
-register uint8_t timera_action asm("r9");
-
 // Register that is used by TIM0_COMPA_vect() and
 // TIM0_COMPA_vect_do_work() to pass on the sampled value. This needs to
 // happen in a global variable, since we can't clobber any other
