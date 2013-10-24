@@ -238,8 +238,9 @@ ISR(__vector_bit_start)
     // timer interrupts were disabled
     TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
 
-    // Always enable the OVF interrupt to detect a reset pulse
-    TIMSK0 |=  (1 << TOIE0);
+    // Disable any pending timer interrupts from the previous bit, but
+    // always enable the interrupt to detect a reset pulse
+    TIMSK0 = (1 << TOIE0);
 
     // If we were powered-down, we'll have been set to a
     // level-triggered interrupt instead of an edge-triggered one,
@@ -294,16 +295,6 @@ ISR(TIM0_COMPB_vect, ISR_NAKED)
 {
     // Release bus
     asm("cbi %0, %1"   : : "I"(_SFR_IO_ADDR(DDRB)), "I"(PINB1));
-    // Disable this timer interupt
-    asm("push r24");
-    asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(SREG)));
-    asm("push r24");
-    asm("in r24, %0"   : : "I"(_SFR_IO_ADDR(TIMSK0)));
-    asm("andi r24, ~%0" : : "M"(1 << OCIE0B));
-    asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(TIMSK0)));
-    asm("pop r24");
-    asm("out %0, r24"  : : "I"(_SFR_IO_ADDR(SREG)));
-    asm("pop r24");
     asm("reti");
 }
 
@@ -447,9 +438,6 @@ prepare_next_bit:
 
         break;
     }
-
-    // Disable this timer interrupt
-    TIMSK0 &= ~(1 << OCIE0A);
 }
 
 ISR(TIM0_OVF_vect)
@@ -479,8 +467,8 @@ ISR(TIM0_OVF_vect)
         MCUCR &= ~(1<<ISC01);
     }
 
-    // Disable this timer interrupt
-    TIMSK0 &= ~(1 << TOIE0);
+    // Disable all timer interrupts
+    TIMSK0 = 0;
 }
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
