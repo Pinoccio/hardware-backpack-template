@@ -581,7 +581,8 @@ void loop(void)
                     break;
                 default:
                     // Unknown command
-                    action = ACTION_IDLE;
+                    flags |= (FLAG_NACK | FLAG_IDLE);
+                    action = ACTION_READY;
                     break;
             }
             break;
