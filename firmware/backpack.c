@@ -572,8 +572,8 @@ void loop(void)
                 // prepare the first byte
             } else if ((flags & FLAG_ENUMERATED) && byte_buf == bus_addr) {
                 // We're addressed, find out what the master wants
-                action = ACTION_READY;
                 state = STATE_RECEIVE_COMMAND;
+                action = ACTION_READY;
             } else {
                 // We're not addressed, stop paying attention. Note that
                 // this does _not_ send the ready bit and ACK bit.
