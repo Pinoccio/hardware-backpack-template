@@ -431,14 +431,10 @@ prepare_next_bit:
         if (!(sample_val & (1 << PINB1)))
             break;
 
-        if (!(flags & FLAG_NACK)) {
-            // Parity was ok
-            action = ACTION_ACK1;
-        } else {
-            // Parity didn't check out when receiving, or main loop
-            // intentionally broke it
+        if (flags & FLAG_NACK)
             action = ACTION_NACK1;
-        }
+        else
+            action = ACTION_ACK1;
 
         break;
     }
