@@ -158,6 +158,10 @@ enum {
     // check the bus for collision (e.g., when another slave is sending
     // a low bit). If collision is detected, FLAG_MUTE is set.
     FLAG_CHECK_COLLISION = 8,
+    // When the time for the ACK/NACK bit comes, send a NACK instead of
+    // an ACK. The mainloop can set this flag during STALL as well to
+    // send a NACK (probably needs to set FLAG_IDLE as well, then).
+    FLAG_NACK = 16,
     // After the ACK/NACK bit, switch to the send action and start
     // sending the byte in byte_buf. Only considered when FLAG_IDLE is
     // not set.
@@ -342,7 +346,7 @@ ISR(__vector_sample)
                 // Parity is not ok, skip the STALL state and go
                 // straight to ready (and NACK and IDLE after that)
                 action = ACTION_READY;
-                flags |= FLAG_IDLE;
+                flags |= (FLAG_IDLE | FLAG_NACK);
             } else {
                 // Parity is ok, let the mainloop decide what to do next
                 action = ACTION_STALL;
@@ -400,7 +404,7 @@ prepare_next_bit:
     case AV_NACK2:
         // Prepare for sending or receiving the next byte (or go to
         // idle, but next_bit won't matter anyway).
-        flags &= ~FLAG_PARITY;
+        flags &= ~(FLAG_PARITY | FLAG_NACK);
         next_bit = 0x80;
 
         // Clear FLAG_MUTE when requested
@@ -427,7 +431,7 @@ prepare_next_bit:
         if (!(sample_val & (1 << PINB1)))
             break;
 
-        if (!(flags & FLAG_PARITY)) {
+        if (!(flags & FLAG_NACK)) {
             // Parity was ok
             action = ACTION_ACK1;
         } else {
