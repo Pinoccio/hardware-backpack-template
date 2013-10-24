@@ -544,7 +544,19 @@ void setup(void)
 void loop(void)
 {
     if (action == ACTION_STALL) {
-        // Done receiving or sending a byte
+        // Done receiving or sending a byte. Interrupts handlers will
+        // send STALL bits while we're processing. Note that the
+        // ACK/NACK bit for the previous byte is _not_ sent yet.
+        //
+        // Here, we must process the received byte and/or prepare the
+        // next byte, based on the state variable. Once done, we should:
+        //  - Set FLAG_NACK to send a nack, or leave it unset to send an
+        //    ack bit.
+        //  - Set FLAG_SEND to send a byte, set FLAG_IDLE to go into
+        //    idle after the ACK/NACK bit, or leave both unset to
+        //    receive a byte.
+        //  - Set action to ACTION_READY (normally) or ACTION_IDLE (when
+        //    no ready or ACK/NACK bits must be sent).
         switch(state) {
         case STATE_RECEIVE_ADDRESS:
             // Read the first byte after a reset, which is either a
@@ -563,7 +575,8 @@ void loop(void)
                 action = ACTION_READY;
                 state = STATE_RECEIVE_COMMAND;
             } else {
-                // We're not addressed, stop paying attention
+                // We're not addressed, stop paying attention. Note that
+                // this does _not_ send the ready bit and ACK bit.
                 action = ACTION_IDLE;
             }
             break;
