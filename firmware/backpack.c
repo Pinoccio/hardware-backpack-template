@@ -501,7 +501,6 @@ void __attribute__((noinline)) loop(void);
 
 void setup(void)
 {
-    bus_addr = 0xff;
     action = ACTION_IDLE;
     // Set ports to output for debug
     PORTB = DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
