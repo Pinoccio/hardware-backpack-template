@@ -28,6 +28,8 @@
 #define SAMPLE_DELAY 250
 #define IDLE_DELAY 50
 
+#include "../protocol.h"
+
 void bp_reset() {
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
@@ -140,10 +142,10 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
 bool bp_scan() {
     bool ok = true;
     bp_reset();
-    ok = ok && bp_write_byte(0xaa);
+    ok = ok && bp_write_byte(BC_CMD_ENUMERATE);
     delay(3);
     uint8_t id[4];
-    uint8_t next_addr = 0;
+    uint8_t next_addr = FIRST_VALID_ADDRESS;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
             ok = bp_read_byte(&id[i]);
@@ -176,7 +178,7 @@ bool bp_read_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
     ok = ok && bp_write_byte(addr);
-    ok = ok && bp_write_byte(0x01);
+    ok = ok && bp_write_byte(CMD_READ_EEPROM);
     ok = ok && bp_write_byte(offset);
     while (ok && len--)
         ok = bp_read_byte(buf++);
@@ -187,7 +189,7 @@ bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     bool ok = true;
     bp_reset();
     ok = ok && bp_write_byte(addr);
-    ok = ok && bp_write_byte(0x02);
+    ok = ok && bp_write_byte(CMD_WRITE_EEPROM);
     ok = ok && bp_write_byte(offset);
     while (ok && len--) {
         ok = bp_write_byte(*buf++);
@@ -226,7 +228,7 @@ void loop() {
     bp_scan();
     delay(100);
     if (!eeprom_written) {
-        print_eeprom(0x00, 0, buf, sizeof(buf));
+        print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
         Serial.print("Incrementing all EEPROM bytes of device 0: ");
         for (size_t i = 0; i < sizeof(buf); ++i) {
             buf[i]++;
@@ -234,14 +236,14 @@ void loop() {
             Serial.print(buf[i], HEX);
         }
         Serial.println();
-        bp_write_eeprom(0x00, 0, buf, sizeof(buf));
+        bp_write_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
         eeprom_written = true;
         delay(100);
     }
     Serial.println("Reading EEPROM...");
-    print_eeprom(0x00, 0, buf, sizeof(buf));
+    print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
     delay(100);
-    print_eeprom(0x01, 0, buf, sizeof(buf));
+    print_eeprom(FIRST_VALID_ADDRESS + 1, 0, buf, sizeof(buf));
 }
 
 /* vim: set filetype=cpp sw=4 sts=4 expandtab: */

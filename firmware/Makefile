@@ -11,10 +11,10 @@ CFLAGS+=-fno-jump-tables
 
 all: upload
 
-backpack.S: backpack.c Makefile
+backpack.S: backpack.c protocol.h Makefile
 	avr-gcc -S $(CFLAGS) $< -o $@ -fwhole-program
 
-backpack.elf: backpack.c Makefile
+backpack.elf: backpack.c protocol.h Makefile
 	avr-gcc -g $(CFLAGS) $< -o $@ -fwhole-program
 
 backpack.hex: backpack.elf

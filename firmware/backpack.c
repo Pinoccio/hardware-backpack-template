@@ -46,6 +46,7 @@
 #include <avr/sleep.h>
 #include <util/delay.h>
 #include <stdbool.h>
+#include "protocol.h"
 
 
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
@@ -64,18 +65,6 @@ uint8_t const ID_OFFSET = 0;
 #define RESET_SAMPLE US_TO_CLOCKS(1400)
 #define DATA_WRITE US_TO_CLOCKS(600)
 #define DATA_SAMPLE US_TO_CLOCKS(300)
-
-// Broadcast commands (i.e., special addresses sent over the wire)
-enum {
-    // Start bus enumeration
-    BC_CMD_ENUMERATE = 0xaa,
-};
-
-// Targeted commands (i.e,. sent over the wire after the address)
-enum {
-    CMD_READ_EEPROM = 0x01,
-    CMD_WRITE_EEPROM = 0x02,
-};
 
 // Constants for the current action the low level protocol handler
 enum {
@@ -567,7 +556,7 @@ void loop(void)
                 flags |= FLAG_SEND;
                 flags &= ~FLAG_ENUMERATED;
                 next_byte = ID_OFFSET;
-                bus_addr = 0;
+                bus_addr = FIRST_VALID_ADDRESS;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
             } else if ((flags & FLAG_ENUMERATED) && byte_buf == bus_addr) {
