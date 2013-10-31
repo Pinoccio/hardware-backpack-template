@@ -100,7 +100,7 @@ bool bp_read_ack_nack() {
     return false;
 }
 
-bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
+bool bp_read_byte(uint8_t *b) {
     bool parity_val = 0;
     *b = 0;
     uint8_t next_bit = 0x80;
@@ -122,7 +122,7 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
     return bp_read_ack_nack();
 }
 
-bool bp_write_byte(uint8_t b, uint8_t flags = 0){
+bool bp_write_byte(uint8_t b){
     bool parity_val = 0;
     uint8_t next_bit = 0x80;
     while (next_bit) {
