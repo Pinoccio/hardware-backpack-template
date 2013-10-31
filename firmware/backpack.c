@@ -432,7 +432,17 @@ prepare_next_bit:
 ISR(TIM0_OVF_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
-    if (!val) {
+    if (val) {
+        // Since it seems the bus is idle, let's power down instead of
+        // only sleeping. Since we can only wake up from powerdown on a
+        // low-level triggered interrupt, we can only go into powerdown
+        // when the bus is high.
+        set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
+        // Make INT0 low-level triggered (note that this assumes ISC00
+        // is not set)
+        MCUCR &= ~(1<<ISC01);
+    } else {
         // Bus is still low, this is a reset pulse (regardless of what
         // state we were in previously!)
         state = STATE_RECEIVE_ADDRESS;
@@ -444,16 +454,6 @@ ISR(TIM0_OVF_vect)
 
         // Clear all flags, except for the enumeration status
         flags &= FLAG_ENUMERATED;
-    } else {
-        // Since it seems the bus is idle, let's power down instead of
-        // only sleeping. Since we can only wake up from powerdown on a
-        // low-level triggered interrupt, we can only go into powerdown
-        // when the bus is high.
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-
-        // Make INT0 low-level triggered (note that this assumes ISC00
-        // is not set)
-        MCUCR &= ~(1<<ISC01);
     }
 
     // Disable all timer interrupts
