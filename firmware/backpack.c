@@ -438,17 +438,7 @@ prepare_next_bit:
 ISR(TIM0_OVF_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
-    if (val) {
-        // Since it seems the bus is idle, let's power down instead of
-        // only sleeping. Since we can only wake up from powerdown on a
-        // low-level triggered interrupt, we can only go into powerdown
-        // when the bus is high.
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-
-        // Make INT0 low-level triggered (note that this assumes ISC00
-        // is not set)
-        MCUCR &= ~(1<<ISC01);
-    } else if (!(GIFR & (1 << INTF0))) {
+    if (!val && !(GIFR & (1 << INTF0))) {
         // Bus is low and the flag for INT0 is not set means the bus is
         // _still_ low. We have to check INTF0 to prevent a race
         // condition where the bus has been high and just goes low at
@@ -665,6 +655,23 @@ void loop(void)
     // an interrupt does not set the action to ACTION_STALL after we
     // checked for it but before entering sleep mode
     if (action != ACTION_STALL) {
+        if (!TIMSK0 && (PINB & (1 << PINB1))) {
+            // No timers are running, so we can go to power down mode
+            // (where timers stop running) instead of sleep mode.  Since
+            // we can only wake up from powerdown on a low-level
+            // triggered interrupt, we can only go into powerdown when
+            // the bus is high. It's ok if the bus becomes low after we
+            // check it above, in that case we'll go into powerdown and
+            // then come out of it directly again.
+            set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
+            // Make INT0 low-level triggered (note that this assumes ISC00
+            // is not set)
+            MCUCR &= ~(1<<ISC01);
+
+            // The INT0 handler takes care of making itself
+            // edge-triggered again and also reset the sleep mode
+        }
         // The instruction after sei is guaranteed to execute before
         // any interrupts are triggered, so we can be sure the sleep
         // mode is entered, with interrupts enabled, but before any
