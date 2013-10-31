@@ -332,13 +332,13 @@ ISR(__vector_sample)
         } else {
             // Full byte and parity bit received
             if (flags & FLAG_PARITY) {
+                // Parity is ok, let the mainloop decide what to do next
+                action = ACTION_STALL;
+            } else {
                 // Parity is not ok, skip the STALL state and go
                 // straight to ready (and NACK and IDLE after that)
                 action = ACTION_READY;
                 flags |= (FLAG_IDLE | FLAG_NACK);
-            } else {
-                // Parity is ok, let the mainloop decide what to do next
-                action = ACTION_STALL;
             }
         }
         break;
@@ -367,7 +367,7 @@ prepare_next_bit:
             val = (byte_buf & next_bit);
         } else {
             // next_bit == 0 means to send the parity bit
-            val = (flags & FLAG_PARITY);
+            val = !(flags & FLAG_PARITY);
         }
 
         if (!val) {

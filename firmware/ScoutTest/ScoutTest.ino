@@ -111,7 +111,7 @@ bool bp_read_byte(uint8_t *b, uint8_t flags = 0) {
         }
         next_bit >>= 1;
     }
-    if (bp_read_bit() != parity_val) {
+    if (bp_read_bit() == parity_val) {
         Serial.println("Parity error");
         return false;
     }
@@ -131,7 +131,7 @@ bool bp_write_byte(uint8_t b, uint8_t flags = 0){
         bp_write_bit(b & next_bit);
         next_bit >>= 1;
     }
-    bp_write_bit(parity_val);
+    bp_write_bit(!parity_val);
 
     if(!bp_read_ready())
         return false;
