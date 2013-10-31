@@ -231,9 +231,15 @@ ISR(__vector_bit_start)
     // timer interrupts were disabled
     TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
 
-    // Disable any pending timer interrupts from the previous bit, but
-    // always enable the interrupt to detect a reset pulse
+    // Start with a clean slate, in case there is a falling edge before
+    // compare A or B interrupts. During normal operation, this should
+    // never happen, but if we don't do this we could deadlock (pulling
+    // the bus forever low) if some high-speed signal is offered on the
+    // bus. We disable the two compare timers and release the bus in
+    // case it was not released (note when a high-speed signal is on the
+    // bus, the INT0 interrupt could trigger with the bus low somehow).
     TIMSK0 = (1 << TOIE0);
+    DDRB &= ~(1 << PINB1);
 
     // If we were powered-down, we'll have been set to a
     // level-triggered interrupt instead of an edge-triggered one,
