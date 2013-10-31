@@ -442,9 +442,14 @@ ISR(TIM0_OVF_vect)
         // Make INT0 low-level triggered (note that this assumes ISC00
         // is not set)
         MCUCR &= ~(1<<ISC01);
-    } else {
-        // Bus is still low, this is a reset pulse (regardless of what
-        // state we were in previously!)
+    } else if (!(GIFR & (1 << INTF0))) {
+        // Bus is low and the flag for INT0 is not set means the bus is
+        // _still_ low. We have to check INTF0 to prevent a race
+        // condition where the bus has been high and just goes low at
+        // the same time the timer overflows, making it otherwise look
+        // like the bus has been low all the time.
+        // Since we're sure the bus is still low, this is a reset pulse
+        // (regardless of what state we were in previously!)
         state = STATE_RECEIVE_ADDRESS;
         action = ACTION_RECEIVE;
         // These are normally initialized after sending the ack/nack
