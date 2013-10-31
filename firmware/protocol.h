@@ -12,6 +12,6 @@ enum {
     CMD_WRITE_EEPROM = 0x02,
 };
 
-uint8_t const FIRST_VALID_ADDRESS = 0x0;
+uint8_t const FIRST_VALID_ADDRESS = 0x1;
 
 #endif // PROTOCOL_H
