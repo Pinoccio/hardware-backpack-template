@@ -531,11 +531,13 @@ void setup(void)
     // makes 4.8Mhz / 8 / 8 = 75kHz
     TCCR0B=(1<<CS01);
 
-    // Enable sleeping. The datasheet recommends only setting this bit
-    // at the moment you actually want to sleep, "to prevent
-    // accidentally putting the system in sleep mode", but why would we
-    // use the sleep instruction if we didn't want to sleep? Silly bit.
-    sleep_enable();
+    // Enable sleeping, and set INT0 to falling-edge.
+    //
+    // The datasheet recommends setting the enable sleep bit at the
+    // moment you actually want to sleep, "to prevent accidentally
+    // putting the system in sleep mode", but why would we use the sleep
+    // instruction if we didn't want to sleep? Silly bit.
+    MCUCR = (1 << SE) | (1 << ISC01);
 
     sei();
 }
