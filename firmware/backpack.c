@@ -52,7 +52,7 @@
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
 #define pulse(pin) \
     PORTB &= ~(1 << pin); \
-    _NOP(); _NOP(); _NOP(); \
+    {uint8_t i; for (i=0;i<3;++i) _NOP();} \
     PORTB |= (1 << pin);
 
 // Offset of the unique ID within the EEPROM
