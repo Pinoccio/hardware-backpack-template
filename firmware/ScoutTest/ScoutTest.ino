@@ -30,6 +30,16 @@
 
 #include "../protocol.h"
 
+typedef enum {
+    OK,
+    TIMEOUT,
+    NACK,
+    NO_ACK_OR_NACK,
+    ACK_AND_NACK,
+    PARITY_ERROR,
+} status;
+
+
 void bp_reset() {
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
@@ -68,17 +78,19 @@ uint8_t bp_read_bit() {
     return value;
 }
 
-bool bp_read_ready() {
+bool bp_read_ready(status *status = NULL) {
     int timeout = 20;
     while (timeout--) {
         if (bp_read_bit() != LOW)
             return true;
     }
     Serial.println("Stall timeout");
+    if (status)
+        *status = TIMEOUT;
     return false;
 }
 
-bool bp_read_ack_nack() {
+bool bp_read_ack_nack(status *status = NULL) {
     bool ack = false, nack = false;
     // Acks are sent as 01, nacks as 10. Since the 0 is dominant during
     // a bus conflict, a reading of 00 means both an ack and a nack was
@@ -88,19 +100,26 @@ bool bp_read_ack_nack() {
     if (bp_read_bit() == LOW)
         nack = true;
 
-    if (nack && ack)
+    if (nack && ack) {
         Serial.println("Both ACK and NAK received");
-    else if (nack)
+        if (status)
+            *status = ACK_AND_NACK;
+    } else if (nack) {
         Serial.println("NAK received");
-    else if (!ack)
+        if (status)
+            *status = NACK;
+    } else if (!ack) {
         Serial.println("No ACK received");
-    else
+        if (status)
+            *status = NO_ACK_OR_NACK;
+    } else {
         return true;
+    }
 
     return false;
 }
 
-bool bp_read_byte(uint8_t *b) {
+bool bp_read_byte(uint8_t *b, status *status = NULL) {
     bool parity_val = 0;
     *b = 0;
     uint8_t next_bit = 0x80;
@@ -113,16 +132,18 @@ bool bp_read_byte(uint8_t *b) {
     }
     if (bp_read_bit() == parity_val) {
         Serial.println("Parity error");
+        if (status)
+            *status = PARITY_ERROR;
         return false;
     }
 
-    if(!bp_read_ready())
+    if(!bp_read_ready(status))
         return false;
 
-    return bp_read_ack_nack();
+    return bp_read_ack_nack(status);
 }
 
-bool bp_write_byte(uint8_t b){
+bool bp_write_byte(uint8_t b, status *status = NULL) {
     bool parity_val = 0;
     uint8_t next_bit = 0x80;
     while (next_bit) {
@@ -133,33 +154,30 @@ bool bp_write_byte(uint8_t b){
     }
     bp_write_bit(!parity_val);
 
-    if(!bp_read_ready())
+    if(!bp_read_ready(status))
         return false;
 
-    return bp_read_ack_nack();
+    return bp_read_ack_nack(status);
 }
 
 bool bp_scan() {
     bool ok = true;
+    status status;
     bp_reset();
-    ok = ok && bp_write_byte(BC_CMD_ENUMERATE);
+    ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
     delay(3);
     uint8_t id[4];
     uint8_t next_addr = FIRST_VALID_ADDRESS;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
-            ok = bp_read_byte(&id[i]);
+            ok = bp_read_byte(&id[i], &status);
+            // Nobody responded, meaning all device are enumerated
+            if (i == 0 && status == NO_ACK_OR_NACK)
+                return true;
         }
 
-        if (!ok) {
-            // TODO: When no devices are left, a parity error occurs
-            // (because bus idle == all ones == parity error). This
-            // means it is not currently possible to tell the difference
-            // between a parity or other error and a completed
-            // enumeration. Assuming enumeration completed on every
-            // error is probably not a good idea...
+        if (!ok)
             break;
-        }
 
         Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(" found with id: ");
         for (uint8_t i = 0; i < sizeof(id); ++i) {
