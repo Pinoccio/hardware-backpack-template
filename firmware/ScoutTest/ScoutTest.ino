@@ -39,16 +39,34 @@ typedef enum {
     PARITY_ERROR,
 } status;
 
+bool bp_wait_for_free_bus(status *status) {
+    uint8_t timeout = 255;
+    while(timeout--) {
+        if (digitalRead(BP_BUS_PIN) == HIGH)
+            return true;
+    }
 
-void bp_reset() {
+    if (status)
+        *status = TIMEOUT;
+    Serial.println("Bus stays low too long!");
+    return false;
+}
+
+
+bool bp_reset(status *status = NULL) {
+    if (!bp_wait_for_free_bus(status))
+        return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(RESET_DELAY);
     pinMode(BP_BUS_PIN, INPUT);
     delayMicroseconds(IDLE_DELAY);
+    return true;
 }
 
-void bp_write_bit(uint8_t bit) {
+bool bp_write_bit(uint8_t bit, status *status = NULL) {
+    if (!bp_wait_for_free_bus(status))
+        return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(START_DELAY);
@@ -57,9 +75,12 @@ void bp_write_bit(uint8_t bit) {
     delayMicroseconds(VALUE_DELAY);
     pinMode(BP_BUS_PIN, INPUT);
     delayMicroseconds(IDLE_DELAY);
+    return true;
 }
 
-bool bp_read_bit(uint8_t *value, status *status) {
+bool bp_read_bit(uint8_t *value, status *status = NULL) {
+    if (!bp_wait_for_free_bus(status))
+        return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(START_DELAY);
@@ -70,14 +91,8 @@ bool bp_read_bit(uint8_t *value, status *status) {
     // If a slave pulls the line low, wait for him to finish (to
     // prevent the idle time from disappearing because of a slow
     // slave), but don't wait forever.
-    uint8_t timeout = 255;
-    while(digitalRead(BP_BUS_PIN) == LOW && timeout--);
-    if (!timeout) {
-        Serial.println("Bus timeout!");
-        if (status)
-            *status = TIMEOUT;
+    if (!bp_wait_for_free_bus(status))
         return false;
-    }
     delayMicroseconds(IDLE_DELAY);
     return true;
 }
@@ -162,25 +177,25 @@ bool bp_read_byte(uint8_t *b, status *status = NULL) {
 
 bool bp_write_byte(uint8_t b, status *status = NULL) {
     bool parity_val = 0;
+    bool ok = true;
     uint8_t next_bit = 0x80;
-    while (next_bit) {
+    while (next_bit && ok) {
         if (b & next_bit)
             parity_val ^= 1;
-        bp_write_bit(b & next_bit);
+        ok = ok && bp_write_bit(b & next_bit, status);
         next_bit >>= 1;
     }
-    bp_write_bit(!parity_val);
+    ok = ok && bp_write_bit(!parity_val, status);
 
-    if(!bp_read_ready(status))
-        return false;
+    ok = ok && bp_read_ready(status);
 
-    return bp_read_ack_nack(status);
+    return ok && bp_read_ack_nack(status);
 }
 
 bool bp_scan() {
     bool ok = true;
-    status status;
-    bp_reset();
+    status status = OK;
+    ok = ok && bp_reset(&status);
     ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
     delay(3);
     uint8_t id[4];
