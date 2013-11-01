@@ -59,29 +59,38 @@ void bp_write_bit(uint8_t bit) {
     delayMicroseconds(IDLE_DELAY);
 }
 
-uint8_t bp_read_bit() {
-    uint8_t value;
+bool bp_read_bit(uint8_t *value, status *status) {
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(START_DELAY);
     pinMode(BP_BUS_PIN, INPUT);
     delayMicroseconds(SAMPLE_DELAY);
-    value = digitalRead(BP_BUS_PIN);
+    *value = digitalRead(BP_BUS_PIN);
     delayMicroseconds(VALUE_DELAY - SAMPLE_DELAY);
     // If a slave pulls the line low, wait for him to finish (to
     // prevent the idle time from disappearing because of a slow
     // slave), but don't wait forever.
     uint8_t timeout = 255;
     while(digitalRead(BP_BUS_PIN) == LOW && timeout--);
-    if (!timeout) Serial.println("Bus timeout!");
+    if (!timeout) {
+        Serial.println("Bus timeout!");
+        if (status)
+            *status = TIMEOUT;
+        return false;
+    }
     delayMicroseconds(IDLE_DELAY);
-    return value;
+    return true;
 }
 
 bool bp_read_ready(status *status = NULL) {
     int timeout = 20;
     while (timeout--) {
-        if (bp_read_bit() != LOW)
+        uint8_t value;
+        if (!bp_read_bit(&value, status))
+            return false;
+
+        // Ready bit?
+        if (value == HIGH)
             return true;
     }
     Serial.println("Stall timeout");
@@ -91,56 +100,64 @@ bool bp_read_ready(status *status = NULL) {
 }
 
 bool bp_read_ack_nack(status *status = NULL) {
-    bool ack = false, nack = false;
+    uint8_t first, second;
+    bool ok = true;
+    ok = ok && bp_read_bit(&first, status);
+    ok = ok && bp_read_bit(&second, status);
+
+    if (!ok)
+        return false;
+
     // Acks are sent as 01, nacks as 10. Since the 0 is dominant during
     // a bus conflict, a reading of 00 means both an ack and a nack was
     // sent.
-    if (bp_read_bit() == LOW)
-        ack = true;
-    if (bp_read_bit() == LOW)
-        nack = true;
-
-    if (nack && ack) {
+    if (first == LOW && second == LOW) {
         Serial.println("Both ACK and NAK received");
         if (status)
             *status = ACK_AND_NACK;
-    } else if (nack) {
+        ok = false;
+    } else if (second == LOW) {
         Serial.println("NAK received");
         if (status)
             *status = NACK;
-    } else if (!ack) {
+        ok = false;
+    } else if (first != LOW) {
         Serial.println("No ACK received");
         if (status)
             *status = NO_ACK_OR_NACK;
-    } else {
-        return true;
+        ok = false;
     }
 
-    return false;
+    return ok;
 }
 
 bool bp_read_byte(uint8_t *b, status *status = NULL) {
     bool parity_val = 0;
+    bool ok = true;
     *b = 0;
     uint8_t next_bit = 0x80;
-    while (next_bit) {
-        if (bp_read_bit()) {
+    uint8_t value;
+    while (next_bit && ok) {
+        ok = ok && bp_read_bit(&value, status);
+
+        if (value) {
             *b |= next_bit;
             parity_val ^= 1;
         }
         next_bit >>= 1;
     }
-    if (bp_read_bit() == parity_val) {
+    ok = ok && bp_read_bit(&value, status);
+
+    if (ok && value == parity_val) {
         Serial.println("Parity error");
         if (status)
             *status = PARITY_ERROR;
         return false;
     }
 
-    if(!bp_read_ready(status))
-        return false;
+    ok = ok && bp_read_ready(status);
 
-    return bp_read_ack_nack(status);
+    return ok && bp_read_ack_nack(status);
 }
 
 bool bp_write_byte(uint8_t b, status *status = NULL) {
