@@ -35,7 +35,71 @@
 //    by the reset detection, but this should somehow be prevented
 //    (perhaps set just a reset flag in the OVF ISR and let the main
 //    loop do all of the other setup?)
-//  - Overview documentation
+
+// Implementation overview
+// -----------------------
+// The code in this file is divided into two main sections: The
+// interrupt routines, who handle the low level of the protocol (sending
+// bits and bytes) and the main loop, which handles the high level of
+// the protocol (giving meaning to the bytes sent).
+//
+// Normal flow is that the ISRs detect a reset signal and prepare to
+// receive the address byte. After the byte was received the ISRs set
+// action to ACTION_STALL, which is the signal for the mainloop to
+// process the byte. While the mainloop is processing, the ISRs make
+// sure that it sends stall bits whenever the master initiates a bit.
+// The mainloop decides wether the next bytes needs to be sent or
+// received and sets the action to ACTION_READY to let the ISRs continue
+// sending the ready and ack bits and then send or receive another byte.
+//
+// After every byte sent or received, the ISRs set action to
+// ACTION_STALL again, and the mainloop decides the next action to take
+// based on the data and its state variable.
+//
+//
+// Within the ISRs, the action variable indicates both how far in the
+// bit sequence it is, as well as the actions to take for the current
+// action (e.g., pull the line low, or sample the line).
+//
+// The action byte effectively forms a state machine, that looks like
+// this:
+//                ↓
+//            +—READY—+
+//            ↓       ↓
+//           ACK1   NACK1
+//            ↓       ↓
+// IDLE ←-+-ACK2-+  NACK2
+//        ↓      ↓    |
+//     RECEIVE  SEND ←+
+//        |      |
+//        +———+——+
+//            ↓
+//          STALL
+//
+// (Note that the current implementation allows going from NACK2 to IDLE
+// and RECEIVE as well, but this is expected to change, so the above
+// drawing reflects the new but not yet implemented situation)
+//
+// Every bit starts with a falling edge, detected by the INT0 interval.
+// Then, either:
+//  - Nothing is done (e.g., send a 1)
+//  - The line is pulled low (e.g., send a 0)
+//  - The line is sampled (e.g., receive a bit, or send a 1 and check
+//    for collisions)
+//
+//  When pulling the line low, the timer compare B interrupt is enabled
+//  to released the line again after the proper time.
+//
+//  When the line needs to be sampled, the timer compare A interrupt is
+//  enabled to sample the time at the proper time.
+//
+//  If the line does not need to be sampled, the ISRs move the action
+//  variable to its next value right away, preparing for the next bit.
+//  If the line does need to be sampled, this is delayed until after the
+//  sampling (since the next action might depend on the data sampled).
+//
+//  The timer overflow interrupt is always enabled after a falling edge,
+//  to detect the reset signal.
 
 // 4.8Mhz oscillator with CKDIV8 fuse set
 #define F_CPU (4800000/8)
@@ -58,13 +122,13 @@
 // Offset of the unique ID within the EEPROM
 uint8_t const UNIQUE_ID_OFFSET = 0;
 
-// Protocol timings
+// Protocol timings, in timer0 clock cycles (which runs at F_CPU / 8)
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
 #define RESET_SAMPLE US_TO_CLOCKS(1400)
 #define DATA_WRITE US_TO_CLOCKS(600)
 #define DATA_SAMPLE US_TO_CLOCKS(300)
 
-// Constants for the current action the low level protocol handler
+// Values for the action variable - low level protocol state
 enum {
     // These are the actual action values, which define the action to
     // take for the current bit
@@ -109,7 +173,7 @@ enum {
     ACTION_READY = AV_READY | AF_SAMPLE,
 };
 
-// Constants for the current state for the high level protocol handler
+// Values for the state variable - high level protocol state
 enum {
     // Idle - Waiting for the next reset to participate (again)
     STATE_IDLE,
@@ -129,6 +193,7 @@ enum {
     STATE_WRITE_EEPROM_RECEIVE_DATA,
 };
 
+// Values for the flags variable - various flags
 enum {
     // When this flag is set, this slave will no longer participate on
     // the bus, but it will still keep its state synchronized. This is
@@ -168,18 +233,30 @@ enum {
 // available, so that's effectively r2-r17. Using all of those will
 // probably kill the compiler, though.
 
+// This is the byte being sent or received. Should be initialized by the
+// mainloop when sending a byte, it is filled by the ISRs when receiving
+// a byte.
 register uint8_t byte_buf asm("r2");
+
+// The bit currently being sent or received during ACTION_SEND or
+// ACTION_RECEIVE (bitmask with exactly 1 bit enabled). If next_bit is
+// 0, the parity bit should be sent or received.
 register uint8_t next_bit asm("r3");
+
+// The address of the next EEPROM byte to send.
 register uint8_t next_byte asm("r4");
 
+// The bus address of this slave (only valid when FLAG_ENUMERATED is
+// set).
 register uint8_t bus_addr asm("r5");
+
+// Various flags, used by both the ISRs and the mainloop.
 register uint8_t flags asm("r6");
 
 // The action to take for the next or current bit
 register uint8_t action asm("r7");
 
-// The higher level protocol state. Only valid when
-// action != ACTION_IDLE.
+// The high level protocol state. Only valid when action != ACTION_IDLE.
 register uint8_t state asm("r8");
 
 // Register that is used by TIM0_COMPA_vect() and
@@ -296,11 +373,8 @@ ISR(TIM0_COMPB_vect, ISR_NAKED)
 }
 
 // This is the naked ISR that is called on TIM0_COMPA interrupts. It
-// immediately takes a sample of the bus.
-// If we would do this in a normal ISR, there would be a delay depending
-// on the length of the prologue generated by the compiler (which would
-// again depend on the number of registers used, and thus saved, in the
-// ISR).
+// immediately takes a sample of the bus. It is naked to minimize the
+// time until the sample is taken.
 ISR(TIM0_COMPA_vect, ISR_NAKED)
 {
     // Sample bus (and all other pins at the same time). Use a global
