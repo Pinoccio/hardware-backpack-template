@@ -29,6 +29,7 @@
 #define IDLE_DELAY 50
 
 #include "../protocol.h"
+#include "crc.h"
 
 typedef enum {
     OK,
@@ -200,16 +201,28 @@ bool bp_scan() {
     delay(3);
     uint8_t id[UNIQUE_ID_LENGTH];
     uint8_t next_addr = FIRST_VALID_ADDRESS;
+    uint8_t crc = 0;
     while (ok) {
         for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
             ok = bp_read_byte(&id[i], &status);
             // Nobody responded, meaning all device are enumerated
             if (i == 0 && status == NO_ACK_OR_NACK)
                 return true;
+            crc = crc_update(UNIQUE_ID_CRC_POLY, crc, id[i]);
         }
 
         if (!ok)
             break;
+
+        if (crc != 0) {
+            Serial.print("Unique ID checksum error: ");
+            for (uint8_t i = 0; i < sizeof(id); ++i) {
+                if (id[i] < 0x10) Serial.print("0");
+                Serial.print(id[i], HEX);
+            }
+            Serial.println();
+            return false;
+        }
 
         Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(" found with id: ");
         for (uint8_t i = 0; i < sizeof(id); ++i) {
