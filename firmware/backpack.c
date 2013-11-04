@@ -56,9 +56,7 @@
     PORTB |= (1 << pin);
 
 // Offset of the unique ID within the EEPROM
-uint8_t const ID_SIZE = 4;
-// Size of the unique ID
-uint8_t const ID_OFFSET = 0;
+uint8_t const UNIQUE_ID_OFFSET = 0;
 
 // Protocol timings
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
@@ -557,7 +555,7 @@ void loop(void)
                 flags |= FLAG_CHECK_COLLISION;
                 flags |= FLAG_SEND;
                 flags &= ~FLAG_ENUMERATED;
-                next_byte = ID_OFFSET;
+                next_byte = UNIQUE_ID_OFFSET;
                 bus_addr = FIRST_VALID_ADDRESS;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
@@ -608,18 +606,18 @@ void loop(void)
             break;
         case STATE_WRITE_EEPROM_RECEIVE_DATA:
             // Write the byte received, but refuse to write our id
-            if (next_byte < ID_OFFSET || next_byte >= ID_OFFSET + ID_SIZE)
+            if (next_byte < UNIQUE_ID_OFFSET || next_byte >= UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH)
                 EEPROM_write(next_byte, byte_buf);
             next_byte++;
             action = ACTION_READY;
             break;
         case STATE_ENUMERATE:
-            if (next_byte == ID_OFFSET + ID_SIZE) {
+            if (next_byte == UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH) {
                 // Entire address sent
                 if (flags & FLAG_MUTE) {
                     // Another device had a lower id, so try again
                     // on the next round
-                    next_byte = ID_OFFSET;
+                    next_byte = UNIQUE_ID_OFFSET;
                     bus_addr++;
                     // Stop muting _after_ sending the ack/nack bit for
                     // the current (last) byte
