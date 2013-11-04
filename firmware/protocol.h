@@ -13,6 +13,6 @@ enum {
 };
 
 uint8_t const FIRST_VALID_ADDRESS = 0x1;
-uint8_t const UNIQUE_ID_LENGTH = 4;
+uint8_t const UNIQUE_ID_LENGTH = 8;
 
 #endif // PROTOCOL_H
