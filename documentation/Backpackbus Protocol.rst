@@ -450,10 +450,12 @@ Check           0x3e
         them. The commands used to generate the example checksum and
         check value above are::
 
-                pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false --reflect-out=false \
-                      --xor-out=0 --check-hexstring 01abcd03000001
-                pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false --reflect-out=false \
-                      --xor-out=0 --check-string "123456789"
+                pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false \
+                      --reflect-out=false --xor-out=0 \
+                      --check-hexstring 01abcd03000001
+                pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false \
+                      --reflect-out=false --xor-out=0 \
+                      --check-string "123456789"
 
 .. admonition:: Rationale: Checksum algorithm
 
