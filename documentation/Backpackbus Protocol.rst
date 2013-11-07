@@ -443,14 +443,14 @@ the bus and not send any handshaking bits.
         never a valid address, which might be useful for
         implementations.
 
-===========  =====================
-Adress       Meaning
-===========  =====================
-0            Reserved
-1 - 127      Slave addresses
-128 - 254    Reserved
-255          Start enumeration
-===========  =====================
+=============  =====================
+Adress         Meaning
+=============  =====================
+0              Reserved
+1 - 127        Slave addresses
+128 - 254      Reserved
+255            Start enumeration
+=============  =====================
 
 =================
 Unique identifier
