@@ -251,6 +251,10 @@ Parity
 The parity used is odd, meaning that the total number of ones in the
 data bits plus parity bit should be odd.
 
+When a slave receives a byte with an incorrect parity value, it should
+complete send the stall and ready bits as normal and then send a nack
+bit and the "Parity error" error code (see below).
+
 .. admonition:: Rationale: Odd parity
 
         The parity bit is chosen such that when no slaves are participating on
@@ -296,10 +300,14 @@ slaves are sending a ready bit) and then continue with the ack or nack.
 ------------
 Ack and Nack
 ------------
-After the ready bit, the slave either sends an ack or a nack. Under
-normal circumstances, the slave sends an ack and the devices continue
-with the next byte. However, when some error condition occurs, the slave
-can send a nack. This can happen when for example:
+After the ready bit, the slave either sends an ack or a nack.
+
+A slave sends an ack by sending a 0 followed by a 1. A nack is the
+reverse, a 1 followed by a 0.
+
+Under normal circumstances, the slave sends an ack and the devices
+continue with the next byte. However, when some error condition occurs,
+the slave can send a nack. This can happen when for example:
 
 * A parity erorr occured
 * The previous received byte did not make sense to the slave (e.g., unknown
@@ -308,12 +316,53 @@ can send a nack. This can happen when for example:
   error)
 * There was an error preparing the next byte (e.g. EEPROM read error)
 
-After a nack was sent, the slave drops off the bus and waits
-for a bus reset to start a new transaction, but future versions of this
-protocol could define other behaviour in specific error conditions.
+After a nack was sent, the slave sends one more byte, which contains an
+error code. The error code byte should be followed by the regular
+handshaking bits, except that the slave may not send a nack bit for it.
 
-A slave sends an ack by sending a 0 followed by a 1. A nack is the
-reverse, a 1 followed by a 0.
+If the master receives a nack for an error code anyway, it must not
+continue to read *another* error code, it should instead end the
+transaction.
+
+After the slave completed sending the error code byte, including the
+handshaking bits, it drops off the bus. The master should end the
+transaction (and possibly try again).
+
+The error code sent can be a generic error code, which has the same
+meaning no matter what state the slave is in. There are also
+command-specific error codes, which are only valid during the execution
+of a particular command (including when a nack is sent in response to
+the command byte itself).
+
+Generic error codes are numbered from 1 upwards, while command-specific
+error codes are numbered from 255 downwards.
+
+.. admonition:: Rationale: Error code numbering
+
+        By splitting the error codes and counting from the outside in,
+        we're sure to never run out of room for either of the
+        categories, at least not until all 255 error codes are taken.
+
+        Furthermore, keeping error code 0 reserved allows
+        implementations to use that code internally to mean "no error".
+
+.. table:: Generic error codes
+
+        ======  =================
+        Code    Meaning
+        ======  =================
+        0x0     Reserved
+        0x1     Other error
+        0x2     Other protocol error
+        0x3     Parity error
+        0x4     Unknown command
+        ======  =================
+
+If a master receives a nack when multiple slaves are still participating
+(e.g., after sending the address byte, or during bus enumeration), it
+should not try to read an error code but end the transaction
+immediately.
+
 
 .. admonition:: Rationale: Two bits for ack/nack
 
@@ -329,18 +378,6 @@ reverse, a 1 followed by a 0.
         meaningful. However, during bus enumeration, multiple slaves will
         participate and case 4 allows the master to detect when *any* device is
         sending a nack.
-
-.. admonition:: Open Question: Detailed error codes?
-
-        Note that when a nack is received by the master, it doesn't know what
-        error caused the nack exactly, so it is only a very coarse grained error
-        reporting mechanism. Future versions of this protocol might add better
-        error reporting (which can be triggered by the nack bit).
-
-        Or should we add that right now? With the current
-        implementation, it seems the only thing that can trigger a nack
-        is a parity error, unless we want to send a nack for trying to
-        write read-only EEPROM bytes?.
 
 To summarize, sending a byte from the master to a slave works by sending
 these bits in the following order:
@@ -390,6 +427,9 @@ future uses.
 Slaves can assume that the master will never enumerate more than 128
 devices, so they do not need to check if their address would become
 invalid.
+
+When a slave receives an unknown broadcast command, it should drop off
+the bus and not send any handshaking bits.
 
 .. admonition:: Rationale: Number of slaves
 
@@ -590,6 +630,9 @@ Commands
 When the master sends a regular address byte (< 128), the addressed slave will
 read another byte from the bus to find out what it is supposed to do.
 
+If the addressed slave reads a command that it does not understand, it
+will send a nack and the "Unknown command" address byte.
+
 Initially, only two commands are defined:
 
 ====   =======
@@ -621,8 +664,24 @@ and then starts to send EEPROM contents starting from that address.
 After the first byte, it continues to send subsequent bytes as long as
 the master keeps reading data.
 
-If bytes are read past the end of the EEPROM, their contents are
-undefined.
+When the address byte sent is beyond the end of the EEPROM, a nack is
+sent with an "Invalid address" error code.
+
+When the last byte of the EEPROM is read, that byte is sent as normal,
+followed by a nack and the "end of EEPROM" error code. In this case, the
+byte itself is valid, but no further bytes can be read.
+
+.. admonition:: Open Question: End of EEPROM error?
+
+        Should this work like described, or should the last byte be
+        acked as normal and the next byte send dummy data and a nack?
+        The latter seems to make some more sense, but is probably harder
+        to implement. Also, the meaning of the nak bit was also to
+        indicate an error with processing the previous byte or preparing
+        the next byte, and the error code clarifies which of the two
+        cases is actually happening...
+
+        Same thing applies to EEPROM write.
 
 =====  =========  =========
 Bytes  Direction  Purpose
@@ -632,6 +691,15 @@ Bytes  Direction  Purpose
 0+     S → M      EEPROM data
 =====  =========  =========
 
+.. table:: Command-specific error codes
+
+        ======  =================
+        Code    Meaning
+        ======  =================
+        0xff    Invalid address
+        0xfe    End of EEPROM
+        ======  =================
+
 ------------
 WRITE_EEPROM
 ------------
@@ -640,14 +708,26 @@ starts to read data from the bus. This data is written to the
 EEPROM, starting at the given address and upwards as long as the
 master continues to transmit bytes.
 
+When the address byte sent is beyond the end of the EEPROM, a nack is
+sent with an "Invalid address" error code.
+
+When the last byte of the EEPROM is written, that byte is received and
+written as normal, followed by a nack and the "end of EEPROM" error
+code. In this case, the byte was succesfully written, but no further
+bytes can be read.
+
 Some bytes in the EEPROM might be read-only and cannot be written.
 Typically, the bytes storing unique id cannot be changed through this
 command, but which bytes this concerns exactly is defined by the EEPROM
 layout specification
 
-When the WRITE_EEPROM command is used to write read-only bytes, the
-slave should just ignore the write and continue to the next byte. It
-should return an ack like normal.
+When the WRITE_EEPROM command is used to write a read-only byte and the
+value to write is different from the current value, the slave sends a
+nack and the "Read-only byte" error code. If the value is not changed,
+the slave sends an ack just as if the byte was written succesfully.
+
+If the byte cannot be written for any other reason, the "Write failed"
+error code is returned.
 
 =====  =========  =========
 Bytes  Direction  Purpose
@@ -657,13 +737,16 @@ Bytes  Direction  Purpose
 0+     M → S      EEPROM data
 =====  =========  =========
 
-.. admonition:: Open Question: nack for read-only bytes?
+.. table:: Command-specific error codes
 
-        Or should the slave return a nack, requiring the master to pay
-        more attention to skip these bytes? This is less efficient when
-        there are read-only bytes spread around the EEPROM, but does
-        allow detecting accidental writes to read-only areas and
-        prevents silently invalidating any EEPROM checksum...
+        ======  =================
+        Code    Meaning
+        ======  =================
+        0xff    Invalid address
+        0xfe    End of EEPROM
+        0xfd    Read only byte
+        0xfc    Write failed
+        ======  =================
 
 =================================
 Future versions and compatibility
