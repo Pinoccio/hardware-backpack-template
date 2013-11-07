@@ -30,6 +30,34 @@ first byte, which indicates the descriptor type.
 In the last descriptor, there is a CRC checksum calculated over the
 entire EEPROM contents up to that byte.
 
+Any data after the checksum descriptor should not be parsed. It is
+recommended to write 0xff bytes after the checksum descriptor to prevent
+accidentally interpreting them as data.
+
+----------
+Endianness
+----------
+Most data in the EEPROM layout occupies only one byte or less, so is
+endian-neutral. Any fields that do occupy multiple fields use the big
+endian layout, meaning the first byte contains the most-significant
+bits, counting downward.
+
+.. admonition:: Rationale: Endianness
+
+        The big endian layout is more intuitive than the little endian
+        format, in the sense that bit and byte order are the same. This
+        mostly makes it easier to make sense of a raw EEPROM dump, which
+        is probably something that will happen regularly during
+        development.
+
+        The AVR architecture has a tendency towards little endian,
+        though the hardware does not really contain any realy multi-byte
+        registers or instructions where endianness comes into play. It
+        seems the avr-gcc implements multi-byte operations as
+        little endian, but it seems there is no performance gain in
+        using little endian over big endian: both will generate the same
+        instructions handling the endianness "manually".
+
 ======
 Header
 ======
@@ -61,19 +89,8 @@ The header contains the following info. Offset and size is in bytes.
         +----------+                                                                                                       +
         | 9        |                                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | a        || Firmware version                                                                                     |
-        +----------+| (2 bytes)                                                                                            +
-        | b        |                                                                                                       |
+        | a        | Firmware version                                                                                      |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-
-.. admonition:: Open Question: Endianness
-
-        What endianness should data in the EEPROM have? Big endian seems
-        to be the data transfer / network order (and also makes more
-        sense in my head), but GCC on AVR seems to do little endian.
-        Perhaps just Big endian and make sure that conversion from
-        EEPROM byte data to 16-bit integers just happens manual
-        bitshifting instead of by pointer casting?
 
 The backpack unique id contains a few subfields. See the Pinoccio
 Backpack Bus Protocol specification for how the id is composed.
@@ -83,23 +100,26 @@ through the Backpack Bus protocol.
 
 The firmware version listed is about the code running inside the
 microcontroller in the backpack, that listens to the backpack bus and
-allows accessing the EEPROM.
+allows accessing the EEPROM. This specification does not mandate any
+particular form for this field, but a simple incrementing number seems
+reasonable. Furthermore, this version does not need to be globally
+unique. Instead, it is expected to be meaningful only within the same
+backpack model.
 
-.. admonition:: Open Question: Firmware version
+.. admonition:: Rationale: Firmware version
 
-        What should we put inside the firmware version field? A
-        particular challenge could be that the firmware development
-        might branch for different types of backpacks. Initial simple
-        backpacks will probably all use the tiny13 with an identical
-        firmware version, but future backpacks might allow more things
-        such as setting I²C addresses or toggling pins. It's entirely
-        possible to have backpack-specific commands as well, which would
-        also lead to backpack-specific firmwares.
+        Including a firmware version is mostly informative, but it
+        could help to debug problems later on.
 
-        Perhaps this field should only identify firmwares released for a
-        specific backpack (or rather, used during the production of a
-        backpack, since we don't actually expect users to upgrade the
-        tiny firmware)? Then one byte is probably sufficient.
+        Different backpack models will likely have different firmwares,
+        with firmware-specific features. They will likely base on the
+        same basic firmware, but development will eventually branch off,
+        so just making this version backpack model-specific makes sense.
+
+        An alternative would be to include a basic version and
+        model-specific version number, but that would require more bits
+        (doing 4.4 leaves only 16 version numbers on each side, which is
+        probably not enough on the longer term).
 
 ===========
 Descriptors
@@ -143,13 +163,14 @@ When a field contains a pin number, it can identify any of the
 pinoccio's pins. This numbering happens based on the physical location
 of the pin, regardless of the actual pin function.
 
-Pins are numbered 0-31. Pin 0 is the pin top left, pin 16 is the pin top
-right. On the v1.0 pinoccio boards, the top is where the USB connector
-is.
+Pins are numbered 1-32. Pin 1 is the pin top left, pin 17 is the pin top
+right, looking at the component side of the board. On the v1.0 pinoccio
+boards, the top is where the USB connector is. Pin number 0 means "not
+connected".
 
-All pin numbers are stored in a 5-bit field, which is exactly big enough
-to adress all pins. However, in general, a few bits above every pin
-number should be kept as reserved for future expansion.
+All pin numbers are stored in a 6-bit field, which has some values to
+spare for future expansion. However, in general a one or two bits above
+every pin number should be kept as reserved for future expansion.
 
 .. admonition:: Rationale: Numbered pins
 
@@ -174,6 +195,24 @@ number should be kept as reserved for future expansion.
         logical-pins-on-scout-v1-to-logical-pins-on-scout-v5 translation
         table later, which will drive us crazy...
 
+.. admonition:: Rationale: Not connected pin number
+
+        Including a pin number for "not connected" is expected to be
+        useful in a few situations:
+
+        - When a pin is optional and can be connected through a solder
+          jumper, this allows explicitely indicating that a pin is
+          disconnected (as opposed to not supported at all). When two
+          variants of a backpack are available, this could allow both
+          to have the same EEPROM structure and offsets, while still
+          showing the difference.
+        - Similar to the above, if a user removes a soldered jumper, he
+          will not have to remove the entirre descriptor but can just
+          flip a few bits.
+        - Sometimes a particular resource will be only partially
+          connected. Consider a UART that only has its TX pin connected,
+          for example.
+
 ------
 Groups
 ------
@@ -187,17 +226,73 @@ descriptor are considered to be inside the group. Any descriptors before
 the first group descriptor are considered to be inside an implicitly
 declared group with an empty name.
 
+.. admonition:: Group-less descriptors
+
+        Instead of grouping all group-less descriptors together in a
+        single group, we could also specify that they will each get
+        their own group. For example, on the wifi backpack, you could
+        have::
+
+          group: wifi
+                  spi
+                  uart
+                  pin: upgrade
+          spi: eep
+          spi: sd
+
+        This would create three groups, "wifi", "eep" and "sd", where
+        the latter two just contain a single spi descriptor with the
+        default name.
+
+        Moving the given name from the descriptor to the implicitly
+        created group and using the default name for the descriptor will
+        always work (wrt to uniqueness), since the descriptor will
+        always end up alone it is group.
+
+        In the current specification, you'd have to add two more
+        explicit group descriptors, or have inconsistently named
+        descriptors: (wifi, spi) for the wifi spi and ("", eep) for the
+        eeprom spi.
+
+        However, for a backpack that just contains a single device (say,
+        the wifi backpack without the eeprom and sd), you'd want to
+        write something like::
+
+          spi
+          uart
+          pin: upgrade
+
+        In the current spec, you'd get three descriptors: ("", spi),
+        ("", uart) and ("", upgrade). Creating implicit groups is not
+        possible for spi and uart (for lack of a name, creating (spi,
+        spi) or (upgrade, upgrade) is really unhelpful). Basing the
+        creation of this implicit group on wether a descriptor is
+        probably confusing.
+
+        Of course, we could just say that if a backpack contains just a
+        single part, but needs multiple descriptors, it should always
+        just explicitely declare a single group (even if it just has a
+        generic name like "dev").
+
+        The above example then just becomes:
+
+          group: wifi
+                  spi
+                  uart
+                  pin: upgrade
+
 ----------------
 Descriptor names
 ----------------
-All descriptors can contain a string, which defines a short name for the
+Most descriptors can contain a string, which defines a short name for the
 resource. This can be used by the user to easily access different pins
 using a short name, as well as by library code running on the scout to
 distinguish different resources.
 
-Sometimes names are superfluous and can be omitted by setting its length
-at 0. In this case, a default name is used, depending on the descriptor
-type. Not all descriptor types allow omitting the name.
+Sometimes names are superfluous and can be omitted by clearing the "has
+name" bit in the descriptor. In this case, a default name is used,
+depending on the descriptor type. Not all descriptor types allow
+omitting the name.
 
 Every resource name used should be unique within the group it is in
 (including within the implicit nameless group), so the group name
@@ -205,15 +300,16 @@ together with the descriptor name can be used to identify the resource
 on the scout. Furthermore, each group must have a name that is unique
 among all groups.
 
-.. admonition:: Open Question: Name encoding
+These strings are always encoded using ASCII, no fancy characters are
+allowed. Even more, it is recommended to keep these identifiers simple
+and use only (lowercase) letters, numbers, periods and underscores to allow
+them to be used as bitlash identifiers.
 
-        What should be the encoding of these names? UTF-8 is the way of
-        the future, but complete overkill here. Plain ASCII is obvious,
-        since they are not intended to encode complicated text. Seems a
-        pity to waste a bit there, though. Using 8859-1 could also work,
-        but we really don't need anything other than letters, numbers
-        and some other stuff. Perhaps try to fit in 6 or even 5 bits and
-        squash together the characters to save space?
+Every character in the string is stored in its own byte. Since ASCII is
+only a 7-bit encoding, the most significant bit of each byte is used to
+indicate the end of the string: If the MSB is 0, there are more
+characters, if the MSB is 1 this is the last character. This means it is
+not possible to indicate an empty string using this mechanism.
 
 .. admonition:: Rationale: Naming resources
 
@@ -226,7 +322,6 @@ among all groups.
           resources even when multiple of the same type are present,
           without having to resort to fragile methods like "the first
           I²C address is always the temperature sensor".
-
 
 ---------------
 Descriptor list
@@ -253,11 +348,8 @@ A name must be specified for this descriptor, there is no default.
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | Name length (*namelen*)                           | *reserved*                                        |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 2       || Resource name                                                                                        |
-        || |vdots| || (*namelen* bytes)                                                                                    |
-        |          || |vdots|                                                                                              |
+        || 1       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 .. admonition:: Open Question: Group types / metadata
@@ -280,13 +372,12 @@ If not specfied, the name of this descriptor defaults to "i2c".
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved* | I²C address                                                                              |
+        | 1        | has name   | I²C address                                                                              |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Name length (*namelen*)                           | *reserved*              | Maximum speed           |
+        | 2        | *reserved*                                                                  | Maximum speed           |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 3       || Resource name                                                                                        |
-        || |vdots| || (*namelen* bytes)                                                                                    |
-        |          || |vdots|                                                                                              |
+        || 3       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 The I²C address is the 7-bit address, without the R/W bit.
@@ -332,14 +423,23 @@ If not specfied, the name of this descriptor defaults to "spi".
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*                           | Slave select pin number                                        |
+        | 1        | *reserved*              | Slave select pin number                                                     |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Name length (*namelen*)                           | *reserved*                                        |
+        | 2        | has name   | LSB first  | CPOL       | CPHA       | *reserved*                                        |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 3       || Resource name                                                                                        |
-        || |vdots| || (*namelen* bytes)                                                                                    |
-        |          || |vdots|                                                                                              |
+        || 3       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+LSB first indicates wether the device expects to transfer the most
+significant or least significant bit first.
+
+The CPOL and CPHA bits represent the clock polarity and phase. CPOL
+represents the idle state of the clock, and CPHA indicates where in the
+clock cycle the data is captured and shifted. These terms have been
+defined in the `SPI Block Guide`_ by Freescale Semiconductor.
+
+.. _SPI Block Guide: http://www.ee.nmt.edu/~teare/ee308l/datasheets/S12SPIV3.pdf
 
 .. admonition:: Open Question: SPI speed
 
@@ -366,19 +466,6 @@ If not specfied, the name of this descriptor defaults to "spi".
 
         I have't been able to find a satisfying solution so far...
 
-.. admonition:: Open Question: Clock polarity, phase and data order
-
-        Another distinguishing characteristic of SPI implementations is
-        apparently the clock polarity and phase, commonly called CPOL
-        and CPHA according to `wikipedia`__. Both values are binary, so
-        just 2 bits would be sufficient to store these. They should
-        probably be added, after the speed value has been decided on.
-
-        __ http://en.wikipedia.org/wiki/Serial_Peripheral_Interface_Bus#Clock_polarity_and_phase
-
-        Data order is a third characteristic, MSB first or LSB first.
-
-
 Single I/O pin
 """"""""""""""
 This describes a single I/O pin used by the backpack.
@@ -393,18 +480,17 @@ A name must be specified for this descriptor, there is no default.
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*                           | Pin number                                                     |
+        | 1        | *reserved*              | Pin number                                                                  |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Name length (*namelen*)                           | *reserved*                                        |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 3       || Resource name                                                                                        |
-        || |vdots| || (*namelen* bytes)                                                                                    |
-        |          || |vdots|                                                                                              |
+        || 2       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 Any pins that are specified by other resources (e.g., MISO or the CS pin
 in an SPI resource) do not also need to be explicitly specified as an
 I/O pin resource.
+
+Power pins, including GND do not need to be explicitly specified either.
 
 .. admonition:: Open Question: Usage field and metadata
 
@@ -440,34 +526,29 @@ I/O pin resource.
         Perhaps it makes sense to split up these usages into multiple
         subfields (input/output, digital/analog, etc?).
 
-.. admonition:: Open Question:: Multiple I/O pins
+        For now, it seems sensible to just leave out this field and add
+        it a later layout version, when the scout-side code is further
+        along as well.
 
-        When multiple pins are used, having to specify them each
-        individually seems cumbersome. Grouping them together seems
-        sensible. Possible options are:
+.. admonition:: Rationale: Single I/O pins only
 
-         - Add a four-byte bitmask field that can include any of the
-           pins. This has the downside that there is no explicit
-           ordering.
-         - Add a pin count field and then add that number of 5-bit pin
-           number fields.
+        It seems overly verbose to use a complete descriptor for every
+        new pin. When declaring a lot of pins, chunking them together in
+        a descriptor seems useful to reduce overhead.
 
-        This seems to mostly make sense when all pins belong to a
-        logical group, like a data or address bus and share a common
-        name and probably also usage info (otherwise, having to
-        duplicate all that in a single descriptor isn't much more
-        efficient than having multiple descriptors).
+        However, in practice, most of the pins will be indepenent and
+        thus need their own name and (once we add them) usage flags and
+        other metadata. This means that stacking together pins could
+        save the descriptor type byte for each pin, but we'll still need
+        the pin number and name, so the gain would be rather small. This
+        would also mean multiple resources (and names) are declared in
+        the same descriptor, which might make the parsing code more
+        complicated.
 
-        For now, it seems we don't need this yet, but the e-ink backpack
-        seems like it might benefit from this with 11 pins (none of them
-        seem to be a logical bus, though).
-
-.. admonition:: Open Question: Default pin name
-
-        Should this descriptor get a default name? It seems there is no
-        sane default, just "pin" does not make sense when listing
-        resources or talking to the pin (unlike the defaults for spi and
-        i2c, for example). Seems sane to just require a name?
+        If at some point a backpack is produced that uses a bus of pins
+        (e.g., 4 or 8 pins who are identical except for the bit they
+        transfer and could also share a common name), introducing a new
+        descriptor for that makes sense.
 
 UART
 """"
@@ -481,15 +562,14 @@ If not specfied, the name of this descriptor defaults to "uart".
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*                           | TX pin number (from backpack point of view)                    |
+        | 1        | *reserved*              | TX pin number (from backpack point of view)                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | *reserved*                           | RX pin number (from backpack point of view)                    |
+        | 2        | *reserved*              | RX pin number (from backpack point of view)                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Name length (*namelen*)                           | Speed                                             |
+        | 3        | has name   | *reserved*                           | Speed                                             |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 4       || Resource name                                                                                        |
-        || |vdots| || (*namelen* bytes)                                                                                    |
-        |          || |vdots|                                                                                              |
+        || 4       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 The TX and RX pins are specified from the backpack point of view, so the
@@ -513,13 +593,6 @@ versa.
         9       57600 bps
         10      115200 bps
         =====   ===============
-
-.. admonition:: Open Question: Control signals
-
-        Should there be any way to specify serial control signals?  It
-        seems any actual handshaking signals are seldomly used in these
-        kinds of systems, the HardwareSerial code doesn't even know
-        them. Just leave this for a future version if we need it?
 
 Power mode
 """"""""""
@@ -565,7 +638,31 @@ can be added by the scout to store arbitrary information. The structure
 of this data is not defined at all, it is up to the scout to interpret
 this.
 
-TODO: layout (data length and arbitrary data).
+Data descriptors are not considered part of any group and are
+recommended to be used only at the end of the EEPROM, just before the
+checksum.
+
+If not specfied, the name of this descriptor defaults to "data".
+
+.. table:: Data descriptor layout
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | has name   | Data length                                                                              |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || 2       || Data                                                                                                 |
+        || |vdots| || |vdots|                                                                                              |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        ||         || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+The data length indicates how many bytes of data are present, excluding
+the header bytes and name bytes.
 
 .. admonition:: Rationale:: Custom data
 
@@ -577,7 +674,7 @@ TODO: layout (data length and arbitrary data).
         the data for a given purpose: it is expected that the code
         running on the scout for a given backpack will know how to read
         and write this data and that it will be the same code that
-        access the data every time.
+        accesses the data every time.
 
 .. admonition:: Open Question:: Multiple data types
 
@@ -588,27 +685,85 @@ TODO: layout (data length and arbitrary data).
         Or would it perhaps make sense to give this descriptor a name as
         well and use that to identify subtypes?
 
+Empty
+"""""
+This descriptor does not contain any data. Instead, it just repeats the
+descriptor type byte an arbitrary amount. The end of the descriptor is
+the first different byte, which is the start of the next descriptor.
+
+.. admonition:: Rationale: Empty descriptor
+
+        This descriptor is intended to allow removal of an existing
+        descriptor, without having to move all of the subsequent
+        descriptors.
+
 Checksum
 """"""""
-The last descriptor in the EEPROM is always of this type and contains a
-checksum, calculated over all previous bytes.
+This descriptor contains a checksum, calculated over all previous bytes
+(including the descriptor type byte of this descriptor).
 
-TODO: Document layout and pick CRC poly
+The checksum descriptor is always the last descriptor, no other
+descriptors are allowed after this one, nor can the checksum descriptor
+be omitted.
+
+The checksum descriptor does not have a name and is not considered to be
+part of a group.
+
+.. table:: Checksum layout
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | High checksum byte                                                                                    |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 2        | Low checksum byte                                                                                     |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+The checksum value is calculated using the CRC algorithm over all bytes
+in the EEPROM up to the checksum. The CRC variant used is a non-standard
+one, as proposed by P. Koopman in the paper `CRC Selection for Embedded
+Network Messages`_. The parameters for this CRC variant are below,
+expressed in terms of the Rocksoft model (see `A PAINLESS GUIDE TO CRC
+ERROR DETECTION ALGORITHMS`_).
+
+:Width:         16 bits
+:Polynomial:    x\ :sup:`16` + x\ :sup:`15` + x\ :sup:`13` + x\ :sup:`10` + x :sup:`9` + x :sup:`8` + x :sup:`7` + x :sup:`6` + x :sup:`4` + x :sup:`1` + 1
+:Poly in hex:   0xa7d3 (Rocksoft) / 0xd3e9 (Koopman)
+:Initial value: 0x0
+:Reflect in:    No
+:Reflect out:   No
+:Xor out:       0x0
+:Check:         0x3f29
 
 .. admonition:: Rationale:: Checksum algorithm
 
         See the Backpack bus specification for some more background on
         checksum algorithm selection.
 
-.. admonition:: Open Question: CRC length
+        Looking at the paper `CRC Selection for Embedded Network
+        Messages`_, none of the 16-bit CRCs selected there come close to
+        the performance bound for 512-bit messages (64 bytes, e.g., a
+        full EEPROM). However, the 0xbaad and 0xd3e9 polynomials are
+        near the bound for messages sizes above 1270 bits (0xbaad is not
+        within 1%, but closer inspection of the raw data shows that it
+        is still within a few %). For sizes above about 250 bits, these
+        still stick within 2x the bound, which is still good.
 
-        Is a single byte CRC enough? Probably two bytes (16 bit CRC)
-        provides some more protection, without being out of proportion
-        (two bytes out of 64 bytes of total EEPROM on the initial attiny
-        used).
+        Given that our inital EEPROM is 512 bits, but it seems unlikely
+        that it will ever be less than half full, both of these
+        polynomials seem promising. The fact that they scale well into
+        bigger EEPROM sizes is useful for future expansion.
 
-        It also seems that sharing a CRC implementation with the 8 bit
-        CRC inside the unique identifier is still feasible.
+        Looking at the raw data for both CRCs shows that 0xbaad is a lot
+        better (but still far from the bound) for small data sizes (<
+        100 bits), but 0xd3e9 is better for any data size > 350 bits, so
+        that seems to be the best one for this application.
+
+.. _CRC Selection for Embedded Network Messages: http://www.ece.cmu.edu/~koopman/crc/
+.. _A PAINLESS GUIDE TO CRC ERROR DETECTION ALGORITHMS: http://www.csm.ornl.gov/~dunigan/crc.html
 
 =============================
 Modifying the EEPROM contents
@@ -656,6 +811,11 @@ the scout's firmware anyway). Also, the descriptors do not explicitely
 store their length, so a scout cannot actually skip a descriptor if it
 does not understand it.
 
+Finally, if the scout encounters an invalid value in a field (e.g., a
+UART speed it does not know about), it should also skip the entire
+backpack, since the layout will have a newer minor version than the
+scout supports.
+
 ---------------
 Future versions
 ---------------
@@ -697,9 +857,6 @@ will also flag an "unsupported EEPROM layout" error).
 
 For the same reason, adding new values to an enumeration field (*e.g.*,
 adding a new UART speed) can also happen with just a mnior version bump.
-
-TODO: Define somewhere that the scout should error out on unknown
-descriptor types or field values.
 
 .. admonition:: Open Question: Configurable parameters
 

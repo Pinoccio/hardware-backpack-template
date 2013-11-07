@@ -4,8 +4,11 @@ from bitstring import Bits, BitArray
 import crcmod
 
 unique_id_crc = crcmod.mkCrcFun(0x12f, 0, False, 0)
+eeprom_crc = crcmod.mkCrcFun(0x1a7d3, 0, False, 0)
 
 class EEPROM:
+    checksum_descriptor_type=0x4
+
     def __init__(self, layout_version, eeprom_size,
                  bus_protocol_version, model, hardware_revision,
                  serial, firmware_version, groups):
@@ -44,7 +47,6 @@ class EEPROM:
             if i != 0 and not g.name:
                 raise ValueError("Only the first group can have an empty name")
 
-
     def encode(self):
         """
         Generate the encoded EEPROM contents as a bytestring.
@@ -57,7 +59,15 @@ class EEPROM:
         for g in self.groups:
             g.encode(self, data)
 
-        # TODO: Checksum
+        if (len(data) % 8 != 0):
+            raise ValueError("Not an integer number of bytes: {} bits".format(len(data)))
+
+        # append the checksum descriptor
+        data.append(Bits(uint=self.checksum_descriptor_type, length=8))
+        data.append(Bits(uintbe=eeprom_crc(data.bytes), length=16))
+
+        if (len(data) // 8  > self.eeprom_size):
+            raise ValueError("Encoded eeprom is to big ({} > {})".format(len(data) // 8, self.eeprom_size))
 
         return data
 

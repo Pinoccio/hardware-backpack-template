@@ -6,29 +6,53 @@ class Descriptor:
         Return the name for this descriptor.
         Returns the default if no name was set.
         """
-
-        if not self.name:
+        try:
+            name = self.name
+        except AttributeError:
+            # This descriptor does not support a name
+            return None
+        if not name:
             try:
                 return getattr(self.__class__, 'default_name')
             except AttributeError:
                 raise ValueError("Name cannot be empty for {}".format(self.__class__.__name__))
         return self.name
 
+    def append_string(self, data, s):
+        """
+        Append a string of characters to the given BitArray. Characters
+        are encoded as ASCII, with the MSB set to 1 for the last
+        character in the string.
+        """
+        if s:
+            for c in s.encode('ascii'):
+                data.append(Bits(uint=c, length=8))
+
+            # Set the MSB of the last byte to signal the end of the
+            # string
+            data[-8] = 1;
+
 class SpiSlaveDescriptor(Descriptor):
     descriptor_type = 0x1
     default_name = "spi"
 
-    def __init__(self, ss_pin, name = ""):
+    def __init__(self, ss_pin, lsb_first, CPOL, CPHA, name = ""):
         self.name = name
         self.ss_pin = ss_pin
+        self.lsb_first = lsb_first
+        self.CPOL = CPOL
+        self.CPHA = CPHA
 
     def encode(self, eeprom, data):
         data.append(Bits(uint=self.descriptor_type, length = 8))
-        data.append(Bits(uint=0, length = 3)) # reserved
-        data.append(Bits(uint=self.ss_pin, length = 5))
-        data.append(Bits(uint=len(self.name), length = 4))
+        data.append(Bits(uint=0, length = 2)) # reserved
+        data.append(Bits(uint=self.ss_pin, length = 6))
+        data.append(Bits(bool=bool(self.name)))
+        data.append(Bits(bool=self.lsb_first))
+        data.append(Bits(bool=self.CPOL))
+        data.append(Bits(bool=self.CPHA))
         data.append(Bits(uint=0, length = 4)) # reserved
-        data.append(Bits(bytes=self.name.encode('ascii')))
+        self.append_string(data, self.name)
 
 class UartDescriptor(Descriptor):
     descriptor_type = 0x2
@@ -68,32 +92,38 @@ class UartDescriptor(Descriptor):
 
     def encode(self, eeprom, data):
         data.append(Bits(uint=self.descriptor_type, length = 8))
+        data.append(Bits(uint=0, length = 2)) # reserved
+        data.append(Bits(uint=self.tx_pin, length = 6))
+        data.append(Bits(uint=0, length = 2)) # reserved
+        data.append(Bits(uint=self.rx_pin, length = 6))
+        data.append(Bits(bool=bool(self.name)))
         data.append(Bits(uint=0, length = 3)) # reserved
-        data.append(Bits(uint=self.tx_pin, length = 5))
-        data.append(Bits(uint=0, length = 3)) # reserved
-        data.append(Bits(uint=self.rx_pin, length = 5))
-        data.append(Bits(uint=len(self.name), length = 4))
         data.append(Bits(uint=self.encoded_speed(eeprom), length = 4))
-        data.append(Bits(bytes=self.name.encode('ascii')))
+        self.append_string(data, self.name)
 
 class IOPinDescriptor(Descriptor):
     descriptor_type = 0x3
 
-    # Usage types:
-    MISC = 0
-
-    def __init__(self, pin, usage, name):
+    def __init__(self, pin, name):
         self.name = name
         self.pin = pin
-        self.usage = usage
 
     def encode(self, eeprom, data):
         data.append(Bits(uint=self.descriptor_type, length = 8))
-        data.append(Bits(uint=0, length = 3)) # reserved
-        data.append(Bits(uint=self.pin, length = 5))
-        data.append(Bits(uint=len(self.name), length = 4))
-        data.append(Bits(uint=0, length = 4)) # reserved
-        data.append(Bits(bytes=self.name.encode('ascii')))
+        data.append(Bits(uint=0, length = 2)) # reserved
+        data.append(Bits(uint=self.pin, length = 6))
+        self.append_string(data, self.name)
+
+class EmptyDescriptor(Descriptor):
+    descriptor_type = 0xff
+
+    def __init__(self, length):
+        self.length = length
+
+    def encode(self, eeprom, data):
+        # Just output the descriptor_type length times
+        for _ in range(self.length):
+            data.append(Bits(uint=self.descriptor_type, length = 8))
 
 class GroupDescriptor(Descriptor):
     descriptor_type = 0x4
@@ -107,9 +137,7 @@ class GroupDescriptor(Descriptor):
     def encode(self, eeprom, data):
         if self.name:
             data.append(Bits(uint=self.descriptor_type, length = 8))
-            data.append(Bits(uint=len(self.name), length = 4))
-            data.append(Bits(uint=0, length = 4)) # reserved
-            data.append(Bits(bytes=self.name.encode('ascii')))
+            self.append_string(data, self.name)
 
         for d in self.descriptors:
             d.encode(eeprom, data)

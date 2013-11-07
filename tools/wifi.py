@@ -24,6 +24,9 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.D7,
+                    CPOL = 0,
+                    CPHA = 0,
+                    lsb_first = 0,
                 ),
 
                 UartDescriptor(
@@ -33,8 +36,8 @@ contents = EEPROM(
                 ),
 
                 IOPinDescriptor(
+                    # TODO: Better / shorter name?
                     name   = "upgrade",
-                    usage  = IOPinDescriptor.MISC,
                     pin    = pins.D6,
                 ),
             ],
@@ -45,6 +48,9 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.D8,
+                    CPOL = 0,
+                    CPHA = 0,
+                    lsb_first = 0,
                 ),
             ],
         ),
@@ -54,6 +60,9 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.SS,
+                    CPOL = 0,
+                    CPHA = 0,
+                    lsb_first = 0,
                 ),
             ],
         ),
@@ -65,6 +74,7 @@ def pretty(bs):
     for i, byte in enumerate(bs.cut(8)):
         val = byte.uint
         out = "{0:02x}: {1:08b} {1:02x}".format(i, val)
+        val &= 0x7f
         if (val >= 0x20 and val < 0x7f):
             out += " \"{}\"".format(chr(val))
         print(out)
