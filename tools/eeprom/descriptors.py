@@ -114,6 +114,24 @@ class IOPinDescriptor(Descriptor):
         data.append(pack('uint:6', self.pin))
         self.append_string(data, self.name)
 
+class PowerUsageDescriptor(Descriptor):
+    descriptor_type = 0x5
+
+    def __init__(self, pin, minimum, typical, maximum):
+        self.pin = pin
+        self.minimum = minimum
+        self.typical = typical
+        self.maximum = maximum
+
+    def encode(self, eeprom, data):
+        data.append(pack('uint:8', self.descriptor_type))
+        data.append(pack('pad:2')) # reserved
+        data.append(pack('uint:6', self.pin))
+        # TODO: Actual encoding for these values
+        data.append(pack('uint:8', self.minimum))
+        data.append(pack('uint:8', self.typical))
+        data.append(pack('uint:8', self.maximum))
+
 class EmptyDescriptor(Descriptor):
     descriptor_type = 0xff
 

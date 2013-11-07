@@ -40,6 +40,13 @@ contents = EEPROM(
                     name   = "upgrade",
                     pin    = pins.D6,
                 ),
+                PowerUsageDescriptor(
+                    pin     = pins.VBAT,
+                    # TODO: These are dummy values
+                    minimum = 0,
+                    typical = 1,
+                    maximum = 100,
+                ),
             ],
         ),
 
@@ -52,6 +59,13 @@ contents = EEPROM(
                     CPHA = 0,
                     lsb_first = 0,
                 ),
+                PowerUsageDescriptor(
+                    pin     = pins.V33,
+                    # TODO: These are dummy values
+                    minimum = 0,
+                    typical = 1,
+                    maximum = 100,
+                ),
             ],
         ),
 
@@ -63,6 +77,13 @@ contents = EEPROM(
                     CPOL = 0,
                     CPHA = 0,
                     lsb_first = 0,
+                ),
+                PowerUsageDescriptor(
+                    pin     = pins.V33,
+                    # TODO: These are dummy values
+                    minimum = 0,
+                    typical = 1,
+                    maximum = 100,
                 ),
             ],
         ),

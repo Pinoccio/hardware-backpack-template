@@ -594,8 +594,8 @@ versa.
         10      115200 bps
         =====   ===============
 
-Power mode
-""""""""""
+Power usage
+"""""""""""
 
 .. admonition:: Open Question:: How should this work?
 
@@ -604,32 +604,46 @@ Power mode
         power modes that can be enabled, but I'm not sure yet how this
         stuff should work or be used...
 
-This describes the power usage of (a part of) the backpack in a particular mode.
+This describes the power usage of (a part of) the backpack, as drawn
+from a particular power pin.
 
-========  =======  ===========================
-Byte(s)   Bits     Meaning
-========  =======  ===========================
-0                  Descriptor type
-1         0-4      Power pin number
-1         5-7      Reserved
-2                  Minimum power usage
-3                  Typical power usage
-4                  Maximum power usage
-5-...              Mode name
-========  =======  ===========================
+A backpack should declare a power usage descriptor for every power line
+it draws from. Within a group, there must not be more than one power
+usage descriptor for a given pin.
 
-For most backpacks, these descriptors will be mostly informative for the
-user or firmware (i.e., the wifi backpack can see if it there is enough
-power available before starting transmission).
+If this descriptor appears as part of a group, it is assumed to describe
+the power usage of that particular part of the backpack. If the
+descriptor is in the default group, it is taken to mean the power usage
+of the entire backpack, excluding any groups that have their own power
+usage desriptors.
 
-All the power modes within the same group are mutually exclusive, only
-one of them can be active at the same time.
+This means that the total power usage of the backpack must be the sum of
+all power usage descriptors in the EEPROM.
 
-For some backpacks, some power modes might need to be explicitely
-enabled through the backpack bus (i.e., the attiny needs to disable a
-voltage regulator or IC for them). This could use bit 1.7 as a flag to
-indicate this need (but it would also need its own command in the
-protocol, so this is left as a TODO).
+This descriptor does not have a name.
+
+.. admonition:: Open Question: Name?
+
+        Is there any reason why this descriptor should need a name?
+
+.. table:: Power usage descriptor
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | *reserved*              | Power pin number                                                            |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 2        | Minimum power usage                                                                                   |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 3        | Typical power usage                                                                                   |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 4        | Maximum power usage                                                                                   |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+TODO: Define format for power usage
 
 Data
 """"
