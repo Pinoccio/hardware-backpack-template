@@ -254,6 +254,10 @@ declared group with an empty name.
         descriptors: (wifi, spi) for the wifi spi and ("", eep) for the
         eeprom spi.
 
+        A possible complication here is the power usage descriptors: If
+        you want to add a power usage descriptor to every group, you'd
+        still have to add explicit group descriptors...
+
         However, for a backpack that just contains a single device (say,
         the wifi backpack without the eeprom and sd), you'd want to
         write something like::
