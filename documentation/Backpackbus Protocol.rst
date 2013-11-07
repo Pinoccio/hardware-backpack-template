@@ -57,6 +57,11 @@ a new transaction by sending a reset signal. To do so, the master pulls
 the line low and keeps it low for a longer period. The slaves always
 detect this signal, regardless of what they were doing before.
 
+To detect this signal, a slave samples the line at a fixed amount of
+time after every falling edge on the bus, unless another falling edge
+occurs before the reset sample time. If the slave finds the line is low,
+a reset has happened.
+
 After a reset signal, a slave must read a single address byte from the
 bus to see if it is addressed.
 
@@ -79,23 +84,47 @@ bus to see if it is addressed.
           always know about the complete protocol, even parts that are
           not relevant to it.
 
-.. admonition:: Open Question: Ending a transaction
+====================
+Ending a transaction
+====================
+A transaction can be ended by leaving the bus high for more than a
+specified amount of time. When a slave does not detect a falling edge on
+the bus for more than this time, it becomes idle. When a slave is idle,
+it responds only to a reset signal and nothing else.
 
-        Do we need some explicit way to end a transaction? For example,
-        when the master has read enough EEPROM bytes, it will simply
-        stop requesting more bits, even though the slave is completely
-        ready to send the next byte (in fact, when the reset pulse for
-        the next transaction begins, the slave will actually try to
-        transmit the first byte already...
+To make sure that a transaction is not ended accidentally halfway, the
+protocol defines a maximum time between to subsequent bit starts.
+Furthermore, the timings have been chosen such that the slave can decide
+the bus was idle for long enough at the same time it samples the bus for
+a reset condition.
 
-        Of course, doing an explicit reset signal at the end of a
-        transaction could help. This causes the slave to normally reside
-        in the "read address byte" state instead of whatever state the
-        end of the last transaction left it in, which is probably an
-        improvement already.
+Alternatively, a transaction can also be ended by a reset signal, which
+at the same time starts the next transaction. In this case, the slave is
+still expecting to send or receive a next byte and will see the falling
+edge as the start of the next bit. However, since this will at most
+cause the slave to process one bit and never a full byte, this should
+not cause any adverse effects.
 
-        Perhaps an explicit "IDLE" broadcast command can be used to
-        explicitly make all slaves idle?
+.. admonition:: Rationale: Ending a transaction
+
+        The protocol must some way to explicitely define the end of a
+        transaction, to prevent the slave from staying in some other
+        state for potentially a long time. Consider for example writing
+        some data to the EEPROM. If the master would simply stop after
+        receiving the last ack signal, the slave would still wait for
+        the next byte to send. If now a glitches on the bus would
+        occur, the slave could think it saw a falling edge and read a 1.
+        If this happens 9 times, it would have read a full byte and
+        write 0xff to the EEPROM.
+
+        It seems this could be mitigated by just sending a reset signal
+        at the end of every transaction, but this would cause the slave
+        to remain in the "read address byte" state where it could
+        eventually read a 0xff address byte.
+
+        For this reason, the slave should fall back to the idle state
+        after some time. A short glitch on the bus cannot accidentally
+        trigger a reset signal, so this should be safe.
 
 =========================
 Transmitting a single bit
@@ -161,7 +190,7 @@ Slave sample data    250μs     350μs     450μs
 Slave send 0         500μs     650μs     800μs
 Master sample data   300μs     350μs     400μs
 
-Next bit start       700μs
+Next bit start       700μs               1100μs
 Bus idle time        50μs
 ===================  ========  ========  ========
 
@@ -169,7 +198,7 @@ All time values indicate a duration from the bit start (the falling edge
 on the bus), except the "Bus idle time", which indicates the minimum
 time the bus should be high between bits (which can cause the "Next bit
 start" to become more than its minimal value if the slave or master
-exceeds its "send 1" time).
+exceeds its "send 0" time).
 
 Implementations should make sure that, under nominal circumstances, the
 durations are implemented like shown in the typical column.
