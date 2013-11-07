@@ -1,4 +1,4 @@
-from bitstring import Bits, BitArray
+from bitstring import Bits, BitArray, pack
 
 class Descriptor:
     def effective_name(self):
@@ -26,7 +26,7 @@ class Descriptor:
         """
         if s:
             for c in s.encode('ascii'):
-                data.append(Bits(uint=c, length=8))
+                data.append(pack('uint:8', c))
 
             # Set the MSB of the last byte to signal the end of the
             # string
@@ -44,14 +44,14 @@ class SpiSlaveDescriptor(Descriptor):
         self.CPHA = CPHA
 
     def encode(self, eeprom, data):
-        data.append(Bits(uint=self.descriptor_type, length = 8))
-        data.append(Bits(uint=0, length = 2)) # reserved
-        data.append(Bits(uint=self.ss_pin, length = 6))
-        data.append(Bits(bool=bool(self.name)))
-        data.append(Bits(bool=self.lsb_first))
-        data.append(Bits(bool=self.CPOL))
-        data.append(Bits(bool=self.CPHA))
-        data.append(Bits(uint=0, length = 4)) # reserved
+        data.append(pack('uint:8', self.descriptor_type))
+        data.append(pack('pad:2')) # reserved
+        data.append(pack('uint:6', self.ss_pin))
+        data.append(pack('bool', bool(self.name)))
+        data.append(pack('bool', self.lsb_first))
+        data.append(pack('bool', self.CPOL))
+        data.append(pack('bool', self.CPHA))
+        data.append(pack('pad:4')) # reserved
         self.append_string(data, self.name)
 
 class UartDescriptor(Descriptor):
@@ -91,14 +91,14 @@ class UartDescriptor(Descriptor):
         raise ValueError("Unsupported UART speed {}".format(self.speed))
 
     def encode(self, eeprom, data):
-        data.append(Bits(uint=self.descriptor_type, length = 8))
-        data.append(Bits(uint=0, length = 2)) # reserved
-        data.append(Bits(uint=self.tx_pin, length = 6))
-        data.append(Bits(uint=0, length = 2)) # reserved
-        data.append(Bits(uint=self.rx_pin, length = 6))
-        data.append(Bits(bool=bool(self.name)))
-        data.append(Bits(uint=0, length = 3)) # reserved
-        data.append(Bits(uint=self.encoded_speed(eeprom), length = 4))
+        data.append(pack('uint:8', self.descriptor_type))
+        data.append(pack('pad:2')) # reserved
+        data.append(pack('uint:6', self.tx_pin))
+        data.append(pack('pad:2')) # reserved
+        data.append(pack('uint:6', self.rx_pin))
+        data.append(pack('bool', bool(self.name)))
+        data.append(pack('pad:3')) # reserved
+        data.append(pack('uint:4', self.encoded_speed(eeprom)))
         self.append_string(data, self.name)
 
 class IOPinDescriptor(Descriptor):
@@ -109,9 +109,9 @@ class IOPinDescriptor(Descriptor):
         self.pin = pin
 
     def encode(self, eeprom, data):
-        data.append(Bits(uint=self.descriptor_type, length = 8))
-        data.append(Bits(uint=0, length = 2)) # reserved
-        data.append(Bits(uint=self.pin, length = 6))
+        data.append(pack('uint:8', self.descriptor_type))
+        data.append(pack('pad:2')) # reserved
+        data.append(pack('uint:6', self.pin))
         self.append_string(data, self.name)
 
 class EmptyDescriptor(Descriptor):
@@ -123,7 +123,7 @@ class EmptyDescriptor(Descriptor):
     def encode(self, eeprom, data):
         # Just output the descriptor_type length times
         for _ in range(self.length):
-            data.append(Bits(uint=self.descriptor_type, length = 8))
+            data.append(pack('uint:8', self.descriptor_type))
 
 class GroupDescriptor(Descriptor):
     descriptor_type = 0x4
@@ -136,7 +136,7 @@ class GroupDescriptor(Descriptor):
 
     def encode(self, eeprom, data):
         if self.name:
-            data.append(Bits(uint=self.descriptor_type, length = 8))
+            data.append(pack('uint:8', self.descriptor_type))
             self.append_string(data, self.name)
 
         for d in self.descriptors:

@@ -1,6 +1,6 @@
 # This file uses python-bitstring and crcmod
 # (pip install bitstring crcmod)
-from bitstring import Bits, BitArray
+from bitstring import Bits, BitArray, pack
 import crcmod
 
 unique_id_crc = crcmod.mkCrcFun(0x12f, 0, False, 0)
@@ -63,8 +63,8 @@ class EEPROM:
             raise ValueError("Not an integer number of bytes: {} bits".format(len(data)))
 
         # append the checksum descriptor
-        data.append(Bits(uint=self.checksum_descriptor_type, length=8))
-        data.append(Bits(uintbe=eeprom_crc(data.bytes), length=16))
+        data.append(pack('uint:8', self.checksum_descriptor_type))
+        data.append(pack('uintbe:16', eeprom_crc(data.bytes)))
 
         if (len(data) // 8  > self.eeprom_size):
             raise ValueError("Encoded eeprom is to big ({} > {})".format(len(data) // 8, self.eeprom_size))
@@ -72,14 +72,14 @@ class EEPROM:
         return data
 
     def encode_header(self, data):
-        data.append(Bits(uint=self.layout_version, length=8))
-        data.append(Bits(uint=self.eeprom_size, length=8))
+        data.append(pack('uint:8', self.layout_version))
+        data.append(pack('uint:8', self.eeprom_size))
         uid = BitArray()
-        uid.append(Bits(uint=self.bus_protocol_version, length=8))
-        uid.append(Bits(uintbe=self.model, length=16))
-        uid.append(Bits(uint=self.hardware_revision, length=8))
-        uid.append(Bits(uintbe=self.serial, length=24))
+        uid.append(pack('uint:8', self.bus_protocol_version))
+        uid.append(pack('uintbe:16', self.model))
+        uid.append(pack('uint:8', self.hardware_revision))
+        uid.append(pack('uintbe:24', self.serial))
         # Calculate CRC over unique id
-        uid.append(Bits(uint=unique_id_crc(uid.bytes), length=8))
+        uid.append(pack('uint:8', unique_id_crc(uid.bytes)))
         data.append(uid)
-        data.append(Bits(uintbe=self.firmware_version, length=16))
+        data.append(pack('uintbe:16', self.firmware_version))
