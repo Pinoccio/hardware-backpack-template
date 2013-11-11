@@ -56,6 +56,9 @@ class EEPROM:
         """
         Generate the encoded EEPROM contents as a bytestring.
         """
+        # Keep a list of rounded values, for user feedback
+        self.roundings = []
+
         self.check()
 
         data = BitArray()
@@ -74,7 +77,7 @@ class EEPROM:
         if (len(data) // 8  > self.eeprom_size):
             raise ValueError("Encoded eeprom is to big ({} > {})".format(len(data) // 8, self.eeprom_size))
 
-        return data
+        return data, self.roundings
 
     def encode_header(self, data):
         data.append(pack('uint:8', self.layout_version))

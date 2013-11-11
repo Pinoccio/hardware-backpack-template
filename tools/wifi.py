@@ -26,6 +26,7 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.D7,
+                    speed = None, # TODO
                     CPOL = 0,
                     CPHA = 0,
                     lsb_first = 0,
@@ -57,6 +58,7 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.D8,
+                    speed = None, # TODO
                     CPOL = 0,
                     CPHA = 0,
                     lsb_first = 0,
@@ -76,6 +78,8 @@ contents = EEPROM(
             descriptors = [
                 SpiSlaveDescriptor(
                     ss_pin = pins.SS,
+                    # TODO, is this really 33Mhz?
+                    speed = 33,
                     CPOL = 0,
                     CPHA = 0,
                     lsb_first = 0,
@@ -102,4 +106,8 @@ def pretty(bs):
             out += " \"{}\"".format(chr(val))
         print(out)
 
-pretty(contents.encode())
+encoded, roundings = contents.encode()
+pretty(encoded)
+if (roundings):
+    print("Roundings:")
+    print("\n".join(roundings))

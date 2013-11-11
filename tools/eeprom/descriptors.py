@@ -1,6 +1,9 @@
 # vim: set sw=4 sts=4 et fileencoding=utf-8
 
 from bitstring import Bits, BitArray, pack
+import math
+
+from eeprom import minifloat
 
 class Descriptor:
     def effective_name(self):
@@ -34,12 +37,25 @@ class Descriptor:
             # string
             data[-8] = 1;
 
+    def append_minifloat(self, eeprom, data, format, unit, value):
+        if value is None:
+            e = s = 0
+        else:
+            (e, s, rounded) = format.encode(value)
+            if value != rounded:
+                eeprom.roundings.append("{0} {2} to {1} {2}".format(value, rounded, unit))
+        data.append(pack('uint:n', e, n = format.ebits))
+        data.append(pack('uint:n', e, n = format.sbits))
+
 class SpiSlaveDescriptor(Descriptor):
     descriptor_type = 0x1
     default_name = "spi"
+    speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
+    speed_unit = 'Mhz'
 
-    def __init__(self, ss_pin, lsb_first, CPOL, CPHA, name = ""):
+    def __init__(self, speed, ss_pin, lsb_first, CPOL, CPHA, name = ""):
         self.name = name
+        self.speed = speed
         self.ss_pin = ss_pin
         self.lsb_first = lsb_first
         self.CPOL = CPOL
@@ -54,6 +70,7 @@ class SpiSlaveDescriptor(Descriptor):
         data.append(pack('bool', self.CPOL))
         data.append(pack('bool', self.CPHA))
         data.append(pack('pad:4')) # reserved
+        self.append_minifloat(eeprom, data, self.speed_format, self.speed_unit, self.speed)
         self.append_string(data, self.name)
 
 class UartDescriptor(Descriptor):
@@ -118,6 +135,8 @@ class IOPinDescriptor(Descriptor):
 
 class PowerUsageDescriptor(Descriptor):
     descriptor_type = 0x5
+    usage_format = minifloat.MinifloatFormat(4, 4, -4, math.ceil)
+    usage_unit = 'μA'
 
     def __init__(self, pin, minimum, typical, maximum):
         self.pin = pin
@@ -129,10 +148,9 @@ class PowerUsageDescriptor(Descriptor):
         data.append(pack('uint:8', self.descriptor_type))
         data.append(pack('pad:2')) # reserved
         data.append(pack('uint:6', self.pin))
-        # TODO: Actual encoding for these values
-        data.append(pack('uint:8', self.minimum))
-        data.append(pack('uint:8', self.typical))
-        data.append(pack('uint:8', self.maximum))
+        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.minimum)
+        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.typical)
+        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.maximum)
 
 class EmptyDescriptor(Descriptor):
     descriptor_type = 0xff
