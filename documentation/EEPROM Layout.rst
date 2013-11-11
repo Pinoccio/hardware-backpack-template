@@ -1,4 +1,6 @@
 .. |vdots| unicode:: U+22EE
+.. |es| replace:: :sub:`e`\\\ :sup:`s`
+
 
 ===============================
 Pinoccio Backpack EEPROM Layout
@@ -431,7 +433,9 @@ If not specfied, the name of this descriptor defaults to "spi".
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 2        | has name   | LSB first  | CPOL       | CPHA       | *reserved*                                        |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 3       || last?     || Resource name                                                                           |
+        | 3        | Maximum speed exponent               | Maximum speed significand                                      |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || 4       || last?     || Resource name                                                                           |
         || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
@@ -445,30 +449,110 @@ defined in the `SPI Block Guide`_ by Freescale Semiconductor.
 
 .. _SPI Block Guide: http://www.ee.nmt.edu/~teare/ee308l/datasheets/S12SPIV3.pdf
 
-.. admonition:: Open Question: SPI speed
+The SPI speed uses a minifloat format that expresses the speed in Mhz.
 
-        Since SPI does not have a well-defined specification and no
-        standard speed grades, using a simple list of fixed maximum
-        speeds like with I²C does not seem feasible. SPI devices usually
-        have a maximum speed defined in their datasheet, which according
-        to Wikipedia is commonly between 10kHz and 100Mhz.
+:sign bit: no
+:significand: 4 bits
+:exponent: 4 bits
+:exponent bias: 6 (*i.e.,* exponent value of 1 means ×2\ :sup:`−5`)
+:significands: 1.0000\ :sub:`2` to 1.1111\ :sub:`2` (normal), 0.0000\ :sub:`2` to 0.1111\ :sub:`2` (denormal)
+:exponents: −5 to 9 (normal), −5 (denormal)
 
-        To cover the whole range in 1kHz granularity, you'd need a 27
-        number, which is way to much for in a descriptor.
+Note that there are no special values like NaN and infinity, so the
+maximum exponent value is not treated specially. The value 0 means the
+speed is unknown or otherwise cannot be defined.
 
-        Something more coarse should be found, probably something with a
-        base and exponent value so the granularity drops when the value
-        increases.
+Speed values should be rounded *down* to the nearest available
+value.
 
-        The Pinoccio scout can only support speeds that are a power-of-2
-        fraction of 8Mhz, so only specifying those would be efficient
-        (the backpack can just select the fastest mode it can support).
-        However, this is not very future-proof, perhaps a future Scout
-        runs at 20Mhz (and then is forced to use 5Mhz for a slave that
-        supports 10Mhz but had to specify 8Mhz in the descriptor) or a
-        future scout might have even more flexibility in SPI speeds...
+.. admonition:: Example: Decoding speed values
 
-        I have't been able to find a satisfying solution so far...
+        Normal numbers (*e ≠ 0*) are decoded with an implicit leading
+        "1.":
+
+        .. math::
+
+                byte = 0x56 \\
+                e = 5 \\
+                s = 0x6 = 0110_2 \\
+                exponent = e + e_bias = 5 − 6 = −1 \\
+                significand = 1.0110_2 \\
+                \\
+                value = significand × 2^{exponent} = 0.0110_2 × 2^{−1} \\
+                value = 0.11011_2 ≈ 0.688\ Mhz = 688\ kHz
+
+        Denormal numbers (*e = 0*) are decoded with an implicit leading
+        "0.", with the same exponent as values with *e = 1*):
+
+        .. math::
+
+                byte = 0x0a \\
+                e = 0 \\
+                s = 0xa = 1010_2 \\
+                exponent = 1 + e_bias = 1 − 6 = -5 \\
+                significand = 0.1010_2 \\
+                \\
+                value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
+                value ≈ 0.0195\ Mhz = 19.5\ kHz
+
+.. table:: SPI speed values
+        :class: align-right
+
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        |es|           0          1          2          3          4          5          6          7          8          9          a          b          c          d          e          f
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        **0**    Unknown    1.95kHz    3.91kHz    5.86kHz    7.81kHz    9.77kHz    11.7kHz    13.7kHz    15.6kHz    17.6kHz    19.5kHz    21.5kHz    23.4kHz    25.4kHz    27.3kHz    29.3kHz
+        **1**    31.2kHz    33.2kHz    35.2kHz    37.1kHz    39.1kHz      41kHz      43kHz    44.9kHz    46.9kHz    48.8kHz    50.8kHz    52.7kHz    54.7kHz    56.6kHz    58.6kHz    60.5kHz
+        **2**    62.5kHz    66.4kHz    70.3kHz    74.2kHz    78.1kHz      82kHz    85.9kHz    89.8kHz    93.8kHz    97.7kHz     102kHz     105kHz     109kHz     113kHz     117kHz     121kHz
+        **3**     125kHz     133kHz     141kHz     148kHz     156kHz     164kHz     172kHz     180kHz     188kHz     195kHz     203kHz     211kHz     219kHz     227kHz     234kHz     242kHz
+        **4**     250kHz     266kHz     281kHz     297kHz     312kHz     328kHz     344kHz     359kHz     375kHz     391kHz     406kHz     422kHz     438kHz     453kHz     469kHz     484kHz
+        **5**     500kHz     531kHz     562kHz     594kHz     625kHz     656kHz     688kHz     719kHz     750kHz     781kHz     812kHz     844kHz     875kHz     906kHz     938kHz     969kHz
+        **6**       1MHz    1.06MHz    1.12MHz    1.19MHz    1.25MHz    1.31MHz    1.38MHz    1.44MHz     1.5MHz    1.56MHz    1.62MHz    1.69MHz    1.75MHz    1.81MHz    1.88MHz    1.94MHz
+        **7**       2MHz    2.12MHz    2.25MHz    2.38MHz     2.5MHz    2.62MHz    2.75MHz    2.88MHz       3MHz    3.12MHz    3.25MHz    3.38MHz     3.5MHz    3.62MHz    3.75MHz    3.88MHz
+        **8**       4MHz    4.25MHz     4.5MHz    4.75MHz       5MHz    5.25MHz     5.5MHz    5.75MHz       6MHz    6.25MHz     6.5MHz    6.75MHz       7MHz    7.25MHz     7.5MHz    7.75MHz
+        **9**       8MHz     8.5MHz       9MHz     9.5MHz      10MHz    10.5MHz      11MHz    11.5MHz      12MHz    12.5MHz      13MHz    13.5MHz      14MHz    14.5MHz      15MHz    15.5MHz
+        **a**      16MHz      17MHz      18MHz      19MHz      20MHz      21MHz      22MHz      23MHz      24MHz      25MHz      26MHz      27MHz      28MHz      29MHz      30MHz      31MHz
+        **b**      32MHz      34MHz      36MHz      38MHz      40MHz      42MHz      44MHz      46MHz      48MHz      50MHz      52MHz      54MHz      56MHz      58MHz      60MHz      62MHz
+        **c**      64MHz      68MHz      72MHz      76MHz      80MHz      84MHz      88MHz      92MHz      96MHz     100MHz     104MHz     108MHz     112MHz     116MHz     120MHz     124MHz
+        **d**     128MHz     136MHz     144MHz     152MHz     160MHz     168MHz     176MHz     184MHz     192MHz     200MHz     208MHz     216MHz     224MHz     232MHz     240MHz     248MHz
+        **e**     256MHz     272MHz     288MHz     304MHz     320MHz     336MHz     352MHz     368MHz     384MHz     400MHz     416MHz     432MHz     448MHz     464MHz     480MHz     496MHz
+        **f**     512MHz     544MHz     576MHz     608MHz     640MHz     672MHz     704MHz     736MHz     768MHz     800MHz     832MHz     864MHz     896MHz     928MHz     960MHz     992MHz
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+
+.. admonition:: Rationale: Speed format
+
+        Every SPI device has a particular maximum supported SPI speed,
+        there are no standard speeds. Because of this, it makes sense to
+        support a wide range of values.
+
+        Looking at the SPI implementation on AVR, the clock speed is
+        derived from the system clock using a prescaler. This means that
+        it does not support arbitrary speeds and the SPI hardware can
+        often not run at the maximum supported speed (which is
+        unavoidable). However, when the speeds supported by the EEPROM
+        layout do not match the speeds supported by the hardware, it
+        could happen that the speed is "rounded down" twice (once to fit
+        in the EEPROM and once to configure the hardware). In some
+        cases, this means that the speed used is not the optimal speed.
+
+        To prevent this, we should make sure that the EEPROM speeds
+        match the hardware speeds as much as possible. An obvious way is
+        to just store the clock divider value to use, so the EEPROM is
+        limited to the values 8Mhz, 4Mhz, 2Mhz, etc. However, if in the
+        future a Scout version is introduced that runs on a different
+        speed (say 20Mhz), or perhaps an ARM version that runs at higher
+        speeds, we'd again have sub-optimal speeds.
+
+        By using this minifloat format, we can support a wide range of
+        values, with reasonable granularity. This allows specifying the
+        maximum SPI speed as accurate as possible, without relying on
+        the implementation details of the current scout design.
+
+        However, by using the Mhz unit for the values, we do ensure that
+        the SPI speeds for a 16Mhz AVR are included, making sure that
+        for the current scout design, we will at least get optimal
+        speeds. But as you can see other common speeds like 20Mhz are
+        also included.
 
 Single I/O pin
 """"""""""""""
@@ -600,14 +684,6 @@ versa.
 
 Power usage
 """""""""""
-
-.. admonition:: Open Question:: How should this work?
-
-        This seems to be a complicated part of the spec still. Below was
-        the initial proposal for a descriptor, that lists one of a few
-        power modes that can be enabled, but I'm not sure yet how this
-        stuff should work or be used...
-
 This describes the power usage of (a part of) the backpack, as drawn
 from a particular power pin.
 
@@ -626,10 +702,6 @@ all power usage descriptors in the EEPROM.
 
 This descriptor does not have a name.
 
-.. admonition:: Open Question: Name?
-
-        Is there any reason why this descriptor should need a name?
-
 .. table:: Power usage descriptor
         :class: align-center
 
@@ -640,14 +712,85 @@ This descriptor does not have a name.
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 1        | *reserved*              | Power pin number                                                            |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Minimum power usage                                                                                   |
+        | 2        | Minimum power usage exponent         | Minimum power usage signifcand                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Typical power usage                                                                                   |
+        | 3        | Typical power usage exponent         | Typical power usage signifcand                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 4        | Maximum power usage                                                                                   |
+        | 4        | Maximum power usage exponent         | Maximum power usage signifcand                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
-TODO: Define format for power usage
+The power usage fields use a minifloat format that expresses the speed
+in MHz.
+
+:sign bit: no
+:significand: 4 bits
+:exponent: 4 bits
+:exponent bias: −4 (*i.e.,* exponent value of 1 means ×2\ :sup:`5`)
+:significands: 1.0000\ :sub:`2` to 1.1111\ :sub:`2` (normal), 0.0000\ :sub:`2` to 0.1111\ :sub:`2` (denormal)
+:exponents: −5 to 9 (normal), −5 (denormal)
+
+Note that there are no special values like NaN and infinity, so the
+maximum exponent value is not treated specially. The value 0 means the
+speed is unknown or otherwise cannot be defined.
+
+Power usage values should be rounded *up* to the nearest available
+value.
+
+.. admonition:: Example: Decoding power usage values
+
+        Normal numbers (*e ≠ 0*) are decoded with an implicit leading
+        "1.":
+
+        .. math::
+
+                byte = 0x56 \\
+                e = 5 \\
+                s = 0x6 = 0110_2 \\
+                exponent = e + e_bias = 5 − (−4) = 9 \\
+                significand = 1.0110_2 \\
+                \\
+                value = significand × 2^{exponent} = 0.0110_2 × 2^{9} \\
+                value = 101100000_2 = 704μA
+
+        Denormal numbers (*e = 0*) are decoded with an implicit leading
+        "0.", with the same exponent as values with *e = 1*):
+
+        .. math::
+
+                byte = 0x0a \\
+                e = 0 \\
+                s = 0xa = 1010_2 \\
+                exponent = 1 + e_bias = 1 − (−4) = 5 \\
+                significand = 0.1010_2 \\
+                \\
+                value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
+                value = 10100_2 = 20 μA
+
+
+.. table:: Power usage values
+        :class: align-right
+
+
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        |es|           0          1          2          3          4          5          6          7          8          9          a          b          c          d          e          f
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        **0**    Unknown       2μA        4μA        6μA        8μA       10μA       12μA       14μA       16μA       18μA       20μA       22μA       24μA       26μA       28μA       30μA 
+        **1**      32μA       34μA       36μA       38μA       40μA       42μA       44μA       46μA       48μA       50μA       52μA       54μA       56μA       58μA       60μA       62μA 
+        **2**      64μA       68μA       72μA       76μA       80μA       84μA       88μA       92μA       96μA      100μA      104μA      108μA      112μA      116μA      120μA      124μA 
+        **3**     128μA      136μA      144μA      152μA      160μA      168μA      176μA      184μA      192μA      200μA      208μA      216μA      224μA      232μA      240μA      248μA 
+        **4**     256μA      272μA      288μA      304μA      320μA      336μA      352μA      368μA      384μA      400μA      416μA      432μA      448μA      464μA      480μA      496μA 
+        **5**     512μA      544μA      576μA      608μA      640μA      672μA      704μA      736μA      768μA      800μA      832μA      864μA      896μA      928μA      960μA      992μA 
+        **6**    1.02mA     1.09mA     1.15mA     1.22mA     1.28mA     1.34mA     1.41mA     1.47mA     1.54mA      1.6mA     1.66mA     1.73mA     1.79mA     1.86mA     1.92mA     1.98mA 
+        **7**    2.05mA     2.18mA      2.3mA     2.43mA     2.56mA     2.69mA     2.82mA     2.94mA     3.07mA      3.2mA     3.33mA     3.46mA     3.58mA     3.71mA     3.84mA     3.97mA 
+        **8**     4.1mA     4.35mA     4.61mA     4.86mA     5.12mA     5.38mA     5.63mA     5.89mA     6.14mA      6.4mA     6.66mA     6.91mA     7.17mA     7.42mA     7.68mA     7.94mA 
+        **9**    8.19mA      8.7mA     9.22mA     9.73mA     10.2mA     10.8mA     11.3mA     11.8mA     12.3mA     12.8mA     13.3mA     13.8mA     14.3mA     14.8mA     15.4mA     15.9mA 
+        **a**    16.4mA     17.4mA     18.4mA     19.5mA     20.5mA     21.5mA     22.5mA     23.6mA     24.6mA     25.6mA     26.6mA     27.6mA     28.7mA     29.7mA     30.7mA     31.7mA 
+        **b**    32.8mA     34.8mA     36.9mA     38.9mA       41mA       43mA     45.1mA     47.1mA     49.2mA     51.2mA     53.2mA     55.3mA     57.3mA     59.4mA     61.4mA     63.5mA 
+        **c**    65.5mA     69.6mA     73.7mA     77.8mA     81.9mA       86mA     90.1mA     94.2mA     98.3mA      102mA      106mA      111mA      115mA      119mA      123mA      127mA 
+        **d**     131mA      139mA      147mA      156mA      164mA      172mA      180mA      188mA      197mA      205mA      213mA      221mA      229mA      238mA      246mA      254mA 
+        **e**     262mA      279mA      295mA      311mA      328mA      344mA      360mA      377mA      393mA      410mA      426mA      442mA      459mA      475mA      492mA      508mA 
+        **f**     524mA      557mA      590mA      623mA      655mA      688mA      721mA      754mA      786mA      819mA      852mA      885mA      918mA      950mA      983mA     1.02A  
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
 
 Data
 """"
