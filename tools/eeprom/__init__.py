@@ -2,6 +2,9 @@
 
 # This file uses python-bitstring and crcmod
 # (pip install bitstring crcmod)
+#
+# It also needs python3, because of some string handling
+
 from bitstring import Bits, BitArray, pack
 import crcmod
 
