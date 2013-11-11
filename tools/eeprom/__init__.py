@@ -1,3 +1,5 @@
+# vim: set sw=4 sts=4 et fileencoding=utf-8
+
 # This file uses python-bitstring and crcmod
 # (pip install bitstring crcmod)
 from bitstring import Bits, BitArray, pack

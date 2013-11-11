@@ -1,3 +1,5 @@
+# vim: set sw=4 sts=4 et fileencoding=utf-8
+
 class ScoutV1Pins:
     """
     Pin assignments on a v1.0 Pinoccio scout

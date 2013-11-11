@@ -1,3 +1,5 @@
+# vim: set sw=4 sts=4 et fileencoding=utf-8
+
 from eeprom import EEPROM
 from eeprom.pins import ScoutV1Pins
 from eeprom.descriptors import *

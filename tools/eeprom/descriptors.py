@@ -1,3 +1,5 @@
+# vim: set sw=4 sts=4 et fileencoding=utf-8
+
 from bitstring import Bits, BitArray, pack
 
 class Descriptor:
