@@ -304,7 +304,7 @@ void loop() {
         return;
     print_scan_result(ids, count);
     delay(100);
-    if (!eeprom_written) {
+    if (!eeprom_written && count) {
         print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
         Serial.print("Incrementing all EEPROM bytes of device 0: ");
         for (size_t i = 0; i < sizeof(buf); ++i) {
@@ -318,9 +318,10 @@ void loop() {
         delay(100);
     }
     Serial.println("Reading EEPROM...");
-    print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
-    delay(100);
-    print_eeprom(FIRST_VALID_ADDRESS + 1, 0, buf, sizeof(buf));
+    for (uint8_t i = 0; i < count; ++i) {
+        print_eeprom(FIRST_VALID_ADDRESS + i, 0, buf, sizeof(buf));
+        delay(100);
+    }
 }
 
 /* vim: set filetype=cpp sw=4 sts=4 expandtab: */
