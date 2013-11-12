@@ -35,10 +35,22 @@ typedef enum {
     OK,
     TIMEOUT,
     NACK,
+    NACK_NO_SLAVE_CODE, // NACK received, but failed to read error code
     NO_ACK_OR_NACK,
     ACK_AND_NACK,
     PARITY_ERROR,
-} status;
+} error_code;
+
+struct status {
+    // What went wrong?
+    error_code code;
+
+    // If code == NACK, what error code did the client send?
+    uint8_t slave_code;
+};
+
+
+
 
 bool bp_wait_for_free_bus(status *status) {
     uint8_t timeout = 255;
@@ -48,7 +60,7 @@ bool bp_wait_for_free_bus(status *status) {
     }
 
     if (status)
-        *status = TIMEOUT;
+        status->code = TIMEOUT;
     Serial.println("Bus stays low too long!");
     return false;
 }
@@ -111,9 +123,11 @@ bool bp_read_ready(status *status = NULL) {
     }
     Serial.println("Stall timeout");
     if (status)
-        *status = TIMEOUT;
+        status->code = TIMEOUT;
     return false;
 }
+
+bool bp_read_byte(uint8_t *b, status *status = NULL);
 
 bool bp_read_ack_nack(status *status = NULL) {
     uint8_t first, second;
@@ -130,24 +144,32 @@ bool bp_read_ack_nack(status *status = NULL) {
     if (first == LOW && second == LOW) {
         Serial.println("Both ACK and NAK received");
         if (status)
-            *status = ACK_AND_NACK;
+            status->code = ACK_AND_NACK;
         ok = false;
     } else if (second == LOW) {
         Serial.println("NAK received");
-        if (status)
-            *status = NACK;
+        if (status) {
+            // Read error code from the slave
+            if (bp_read_byte(&status->slave_code)) {
+                status->code = NACK;
+                Serial.print("Slave error code: "); Serial.println(status->slave_code);
+            } else {
+                Serial.println("---> Failed to receive error code after NAK");
+                status->code = NACK_NO_SLAVE_CODE;
+            }
+        }
         ok = false;
     } else if (first != LOW) {
         Serial.println("No ACK received");
         if (status)
-            *status = NO_ACK_OR_NACK;
+            status->code = NO_ACK_OR_NACK;
         ok = false;
     }
 
     return ok;
 }
 
-bool bp_read_byte(uint8_t *b, status *status = NULL) {
+bool bp_read_byte(uint8_t *b, status *status) {
     bool parity_val = 0;
     bool ok = true;
     *b = 0;
@@ -167,7 +189,7 @@ bool bp_read_byte(uint8_t *b, status *status = NULL) {
     if (ok && value == parity_val) {
         Serial.println("Parity error");
         if (status)
-            *status = PARITY_ERROR;
+            status->code = PARITY_ERROR;
         return false;
     }
 
@@ -176,7 +198,7 @@ bool bp_read_byte(uint8_t *b, status *status = NULL) {
     return ok && bp_read_ack_nack(status);
 }
 
-bool bp_write_byte(uint8_t b, status *status = NULL) {
+bool bp_write_byte(uint8_t b, status *status = NULL, bool invert_parity = false) {
     bool parity_val = 0;
     bool ok = true;
     uint8_t next_bit = 0x80;
@@ -186,6 +208,10 @@ bool bp_write_byte(uint8_t b, status *status = NULL) {
         ok = ok && bp_write_bit(b & next_bit, status);
         next_bit >>= 1;
     }
+
+    if (invert_parity) // for testing
+        parity_val = !parity_val;
+
     ok = ok && bp_write_bit(!parity_val, status);
 
     ok = ok && bp_read_ready(status);
@@ -195,10 +221,10 @@ bool bp_write_byte(uint8_t b, status *status = NULL) {
 
 bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
     bool ok = true;
-    status status = OK;
+    status status = {OK, 0};
     ok = ok && bp_reset(&status);
     ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
-    if (status == NO_ACK_OR_NACK) {
+    if (status.code == NO_ACK_OR_NACK) {
         // Nobody on the bus
         *count = 0;
         return true;
@@ -210,7 +236,7 @@ bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
         for (uint8_t i = 0; i < UNIQUE_ID_LENGTH && ok; ++i) {
             ok = bp_read_byte(&id[i], &status);
             // Nobody responded, meaning all device are enumerated
-            if (i == 0 && status == NO_ACK_OR_NACK) {
+            if (i == 0 && status.code == NO_ACK_OR_NACK) {
                 *count = next_addr - FIRST_VALID_ADDRESS;
                 return true;
             }
@@ -296,6 +322,8 @@ void loop() {
     uint8_t buf[16];
     uint8_t ids[4][8];
     uint8_t count = sizeof(ids)/sizeof(*ids);
+    uint8_t b;
+    status status = {OK, 0};
     delay(1000);
     Serial.println("Scanning...");
     digitalWrite(3, HIGH);
@@ -321,6 +349,165 @@ void loop() {
     for (uint8_t i = 0; i < count; ++i) {
         print_eeprom(FIRST_VALID_ADDRESS + i, 0, buf, sizeof(buf));
         delay(100);
+    }
+
+    for (uint8_t i = 0; i < count; ++i) {
+        Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
+        Serial.println("Only errors prefixed with ---> are unexpected");
+        bp_reset();
+        // Send a normal addressing byte
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a command with a parity error
+        } else if (bp_write_byte(CMD_READ_EEPROM, &status, true)) {
+            Serial.println("---> Undetected parity error");
+        } else if (status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after parity error, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_PARITY) {
+            Serial.print("---> Not parity error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after parity error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Send a normal addressing byte
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write an unknown command
+        } else if (bp_write_byte(CMD_RESERVED, &status) || status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after unknown command, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_UNKNOWN_COMMAND) {
+            Serial.print("---> Not unknown command error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after unknown command error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Send an out-of-bound EEPROM address
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a read EEPROM command
+        } else if (!bp_write_byte(CMD_READ_EEPROM, &status)) {
+            Serial.println("---> Read EEPROM command failed");
+        // Read from address 100
+        } else if (bp_write_byte(100, &status)) {
+            Serial.println("---> Invalid address not rejected");
+        } else if (status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after invalid address, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_READ_EEPROM_INVALID_ADDRESS) {
+            Serial.print("---> Not invalid address error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after invalid address error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Read overflow into an invalid address
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a read EEPROM command
+        } else if (!bp_write_byte(CMD_READ_EEPROM, &status)) {
+            Serial.println("---> Read EEPROM command failed");
+        // Read from address 63
+        } else if (!bp_write_byte(63, &status)) {
+            Serial.println("---> Valid address rejected");
+        // Read first (valid) byte
+        } else if (!bp_read_byte(&b, &status)) {
+            Serial.println("---> Failed to read valid byte");
+        // Read next (invalid) byte
+        } else if (bp_read_byte(&b, &status)) {
+            Serial.println("---> Overflowed read address not rejected");
+        } else if (status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after read address overflow, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_READ_EEPROM_INVALID_ADDRESS) {
+            Serial.print("---> Not invalid read address error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after invalid write address error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Write overflow into an invalid address
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a read EEPROM command
+        } else if (!bp_write_byte(CMD_WRITE_EEPROM, &status)) {
+            Serial.println("---> Write EEPROM command failed");
+        // Write to address 63
+        } else if (!bp_write_byte(63, &status)) {
+            Serial.println("---> Valid address rejected");
+        // Write byte (without changing it, b should still contain the
+        // byte read above).
+        } else if (!bp_write_byte(b, &status)) {
+            Serial.println("---> Failed to write valid byte");
+        // Write next (invalid) byte
+        } else if (bp_write_byte(0, &status)) {
+            Serial.println("---> Overflowed write address not rejected");
+        } else if (status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after write address overflow, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_WRITE_EEPROM_INVALID_ADDRESS) {
+            Serial.print("---> Not invalid write address error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after invalid write address error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Write read-only byte
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a read eeprom command
+        } else if (!bp_write_byte(CMD_WRITE_EEPROM, &status)) {
+            Serial.println("---> Read EEPROM command failed");
+        // Write the address of the supported protocol version
+        } else if (!bp_write_byte(0, &status)) {
+            Serial.println("---> Valid address rejected");
+        // Write a different byte into position 0
+        } else if (bp_write_byte(ids[i][0] + 1, &status)) {
+            Serial.println("---> Writing read-only byte not rejected");
+        } else if (status.code != NACK) {
+            Serial.print("---> No NACK or no error code received after address overflow, but: "); Serial.println(status.code);
+        } else if (status.slave_code != ERR_WRITE_EEPROM_READ_ONLY) {
+            Serial.print("---> Not invalid address error code: "); Serial.println(b);
+        // Read a byte to see if anyone is still on the bus...
+        } else if ((status.code = OK) == OK &&
+                   (bp_read_byte(&b, &status) ||
+                    status.code != NO_ACK_OR_NACK)) {
+            Serial.println("---> Bus not empty after invalid address error");
+        }
+
+        bp_reset();
+        status.code = OK;
+        // Write read-only byte with unchanged value
+        if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
+            Serial.println("---> Adressing failed?");
+        // Write a read eeprom command
+        } else if (!bp_write_byte(CMD_WRITE_EEPROM, &status)) {
+            Serial.println("---> Read EEPROM command failed");
+        // Write the address of the supported protocol version
+        } else if (!bp_write_byte(0, &status)) {
+            Serial.println("---> Valid address rejected");
+        // Write an unchanged byte into position 0
+        } else if (!bp_write_byte(ids[i][0], &status)) {
+            Serial.println("---> Writing read-only byte with unchanged value failed");
+        }
     }
 }
 

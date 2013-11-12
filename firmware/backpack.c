@@ -63,18 +63,21 @@
 //
 // The action byte effectively forms a state machine, that looks like
 // this:
-//                ↓
-//            +—READY—+
-//            ↓       ↓
-//           ACK1   NACK1
-//            ↓       ↓
-// IDLE ←-+-ACK2-+  NACK2
-//        ↓      ↓    |
-//     RECEIVE  SEND ←+
-//        |      |
-//        +———+——+
-//            ↓
-//          STALL
+//                          ↓
+//    +—————————————————→ READY ←-----+
+//    |                   |   |       |
+//    |                   ↓   ↓       |
+//    |                ACK1   NACK1   |
+//    |                 ↓       ↓     |
+//    |      IDLE ←-+-ACK2-+  NACK2   |
+//    |             ↓      ↓    |     |
+//    |  reset → RECEIVE  SEND ←+     |
+//    |          |  |      | |        |
+//    +——————————+  +———+——+ +————————+
+//     parity error     ↓     sent error code
+//                    STALL
+//
+//
 //
 // (Note that the current implementation allows going from NACK2 to IDLE
 // and RECEIVE as well, but this is expected to change, so the above
@@ -191,6 +194,9 @@ enum {
     STATE_WRITE_EEPROM_RECEIVE_ADDR,
     // CMD_WRITE_EEPROM and write address received, now writing
     STATE_WRITE_EEPROM_RECEIVE_DATA,
+    // CMD_WRITE_EEPROM or CMD_WRITE_EEPROM address overflowed the
+    // EEPROM
+    STATE_READ_EEPROM_OVERFLOW,
 };
 
 // Values for the flags variable - various flags
@@ -210,19 +216,15 @@ enum {
     // check the bus for collision (e.g., when another slave is sending
     // a low bit). If collision is detected, FLAG_MUTE is set.
     FLAG_CHECK_COLLISION = 8,
-    // When the time for the ACK/NACK bit comes, send a NACK instead of
-    // an ACK. The mainloop can set this flag during STALL as well to
-    // send a NACK (probably needs to set FLAG_IDLE as well, then).
-    FLAG_NACK = 16,
-    // After the ACK/NACK bit, switch to the send action and start
-    // sending the byte in byte_buf. Only considered when FLAG_IDLE is
-    // not set.
-    FLAG_SEND = 32,
-    // After the ACK/NACK bit, switch to idle and drop off the bus
-    FLAG_IDLE = 64,
+    // After the ACK bit:
+    //  - if FLAG_IDLE is set, switch to idle and drop off the bus
+    //  - if FLAG_SEND is set, switch to sending a byte
+    //  - otherwise, switch to receiving a byte
+    FLAG_SEND = 16,
+    FLAG_IDLE = 32,
     // After sending the ACK/NACK bit, clear FLAG_MUTE and
     // FLAG_CLEAR_MUTE
-    FLAG_CLEAR_MUTE = 128,
+    FLAG_CLEAR_MUTE = 64,
 };
 
 // Putting global variables in fixed registers saves a lot of
@@ -258,6 +260,11 @@ register uint8_t action asm("r7");
 
 // The high level protocol state. Only valid when action != ACTION_IDLE.
 register uint8_t state asm("r8");
+
+// When this is set, the next ack/nack bit will be a nack, followed by
+// this error code
+register uint8_t err_code asm("r9");
+
 
 // Register that is used by TIM0_COMPA_vect() and
 // TIM0_COMPA_vect_do_work() to pass on the sampled value. This needs to
@@ -413,10 +420,10 @@ ISR(__vector_sample)
                 // Parity is ok, let the mainloop decide what to do next
                 action = ACTION_STALL;
             } else {
-                // Parity is not ok, skip the STALL state and go
-                // straight to ready (and NACK and IDLE after that)
+                // Parity is not ok, skip the STALL state and send a
+                // NACK and error code
                 action = ACTION_READY;
-                flags |= (FLAG_IDLE | FLAG_NACK);
+                err_code = ERR_PARITY;
             }
         }
         break;
@@ -431,7 +438,18 @@ ISR(__vector_sample)
 
         if (!next_bit) {
             // Just sent the parity bit
-            action = ACTION_STALL;
+            if (err_code != ERR_OK) {
+                // We just sent an error code, so skip the stall stage
+                action = ACTION_READY;
+                // Clear the error code, to prevent sending a nack for it
+                err_code = ERR_OK;
+                // Switch to idle after the ack bit
+                flags |= FLAG_IDLE;
+            } else {
+                // Byte was a normal byte, let the mainloop decide what
+                // to do next
+                action = ACTION_STALL;
+            }
             break;
         }
 
@@ -467,21 +485,21 @@ prepare_next_bit:
     case AV_NACK1:
         action = ACTION_NACK2;
         break;
-    case AV_ACK2:
     case AV_NACK2:
-        // Prepare for sending or receiving the next byte (or go to
-        // idle, but next_bit won't matter anyway).
-        flags &= ~(FLAG_PARITY | FLAG_NACK);
-        next_bit = 0x80;
+        // Send an error byte
+        goto prepare_next_bit;
+    case AV_ACK2:
+        if (flags & FLAG_IDLE) {
+            action = ACTION_IDLE;
+            break;
+        }
 
         // Clear FLAG_MUTE when requested
         if (flags & FLAG_CLEAR_MUTE)
             flags &= ~(FLAG_MUTE | FLAG_CLEAR_MUTE);
 
-        // Decide upon the next action, IDLE, SEND or RECEIVE.
-        if (flags & FLAG_IDLE) {
-            action = ACTION_IDLE;
-        } else if (flags & FLAG_SEND) {
+        // Decide upon the next action
+        if (flags & FLAG_SEND) {
             // Set up the first bit
             goto prepare_next_bit;
         } else {
@@ -498,10 +516,17 @@ prepare_next_bit:
         if (!(sample_val & (1 << PINB1)))
             break;
 
-        if (flags & FLAG_NACK)
+        // Prepare for sending or receiving the next byte
+        flags &= ~(FLAG_PARITY);
+        next_bit = 0x80;
+
+        if (err_code != ERR_OK) {
             action = ACTION_NACK1;
-        else
+            byte_buf = err_code;
+        } else {
             action = ACTION_ACK1;
+            // byte_buf is already set, or will be cleared after ACK2
+        }
 
         break;
     }
@@ -536,6 +561,7 @@ ISR(TIM0_OVF_vect)
         // (regardless of what state we were in previously!)
         state = STATE_RECEIVE_ADDRESS;
         action = ACTION_RECEIVE;
+        err_code = ERR_OK;
         // These are normally initialized after sending the ack/nack
         // bit, but we're skipping that after a reset.
         byte_buf = 0;
@@ -630,11 +656,11 @@ void loop(void)
         //
         // Here, we must process the received byte and/or prepare the
         // next byte, based on the state variable. Once done, we should:
-        //  - Set FLAG_NACK to send a nack, or leave it unset to send an
-        //    ack bit.
+        //  - Set err_code to send a NACK, the error code and switch to
+        //    idle.  Otherwise, an ACK will be sent.
         //  - Set FLAG_SEND to send a byte, set FLAG_IDLE to go into
-        //    idle after the ACK/NACK bit, or leave both unset to
-        //    receive a byte.
+        //    idle after the ACK bit, or leave both unset to receive a
+        //    byte.
         //  - Set action to ACTION_READY (normally) or ACTION_IDLE (when
         //    no ready or ACK/NACK bits must be sent).
         switch(state) {
@@ -674,7 +700,7 @@ void loop(void)
                     break;
                 default:
                     // Unknown command
-                    flags |= (FLAG_NACK | FLAG_IDLE);
+                    err_code = ERR_UNKNOWN_COMMAND;
                     action = ACTION_READY;
                     break;
             }
@@ -685,6 +711,11 @@ void loop(void)
             next_byte = byte_buf;
             flags |= FLAG_SEND;
             state = STATE_READ_EEPROM_SEND_DATA;
+            if (next_byte > E2END) {
+                err_code = ERR_READ_EEPROM_INVALID_ADDRESS;
+                action = ACTION_READY;
+                break;
+            }
             // Don't change out of STALL, let the next iteration
             // prepare the first byte
             break;
@@ -694,11 +725,20 @@ void loop(void)
             next_byte = byte_buf;
             state = STATE_WRITE_EEPROM_RECEIVE_DATA;
             action = ACTION_READY;
+            if (next_byte > E2END)
+                err_code = ERR_READ_EEPROM_INVALID_ADDRESS;
             break;
         case STATE_WRITE_EEPROM_RECEIVE_DATA:
-            // Write the byte received, but refuse to write our id
-            if (next_byte < UNIQUE_ID_OFFSET || next_byte >= UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH)
-                EEPROM_write(next_byte, byte_buf);
+            if (next_byte > E2END) {
+                err_code = ERR_WRITE_EEPROM_INVALID_ADDRESS;
+            } else if (byte_buf != EEPROM_read(next_byte)) {
+                // Byte was actually changed. Write it, unless it is a
+                // read-only byte
+                if (next_byte >= UNIQUE_ID_OFFSET && next_byte < UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH)
+                    err_code = ERR_WRITE_EEPROM_READ_ONLY;
+                else
+                    EEPROM_write(next_byte, byte_buf);
+            }
             next_byte++;
             action = ACTION_READY;
             break;
@@ -732,11 +772,23 @@ void loop(void)
             action = ACTION_READY;
             break;
         case STATE_READ_EEPROM_SEND_DATA:
-            // Read and send next EEPROM byte
-            byte_buf = EEPROM_read(next_byte);
-            next_byte++;
+            if (next_byte > E2END) {
+                // Just send the last byte again, which will then be
+                // NACKed below (but we still have to ACK the previous
+                // byte first).
+                state = STATE_READ_EEPROM_OVERFLOW;
+            } else {
+                // Read and send next EEPROM byte
+                byte_buf = EEPROM_read(next_byte);
+                next_byte++;
+            }
             action = ACTION_READY;
             break;
+        case STATE_READ_EEPROM_OVERFLOW:
+            // We just send a dummy value for an overflowed read. NACK
+            // this byte and send an error code
+            err_code = ERR_READ_EEPROM_INVALID_ADDRESS;
+            action = ACTION_READY;
         }
     }
 

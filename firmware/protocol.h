@@ -8,6 +8,7 @@ enum {
 
 // Targeted commands (i.e,. sent over the wire after the address)
 enum {
+    CMD_RESERVED = 0x00,
     CMD_READ_EEPROM = 0x01,
     CMD_WRITE_EEPROM = 0x02,
 };
@@ -15,5 +16,17 @@ enum {
 uint8_t const FIRST_VALID_ADDRESS = 0x1;
 uint8_t const UNIQUE_ID_LENGTH = 8;
 uint8_t const UNIQUE_ID_CRC_POLY = 0x2f;
+
+enum {
+	ERR_OK = 0,
+	ERR_OTHER = 1,
+	ERR_PROTOCOL = 2,
+	ERR_PARITY = 3,
+	ERR_UNKNOWN_COMMAND = 4,
+
+	ERR_WRITE_EEPROM_INVALID_ADDRESS = 0xff,
+	ERR_WRITE_EEPROM_READ_ONLY = 0xfe,
+	ERR_READ_EEPROM_INVALID_ADDRESS = 0xff,
+};
 
 #endif // PROTOCOL_H
