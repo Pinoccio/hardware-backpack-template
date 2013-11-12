@@ -520,7 +520,13 @@ ISR(TIM0_OVF_vect)
     if (GIFR & (1 << INTF0))
         return;
 
-    if (!val) {
+    if (val) {
+        // Bus has gone high. Since there hasn't been an INT0 in the
+        // meantime, so more time has passed than is allowed between two
+        // bits. This means the transaction is finished and the bus is
+        // idle again.
+        action = ACTION_IDLE;
+    } else {
         // Bus is low and the flag for INT0 is not set means the bus is
         // _still_ low. We have to check INTF0 to prevent a race
         // condition where the bus has been high and just goes low at

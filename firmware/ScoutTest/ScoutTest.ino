@@ -198,7 +198,6 @@ bool bp_scan() {
     status status = OK;
     ok = ok && bp_reset(&status);
     ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
-    delay(3);
     uint8_t id[UNIQUE_ID_LENGTH];
     uint8_t next_addr = FIRST_VALID_ADDRESS;
     uint8_t crc = 0;
