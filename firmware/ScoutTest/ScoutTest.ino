@@ -193,20 +193,22 @@ bool bp_write_byte(uint8_t b, status *status = NULL) {
     return ok && bp_read_ack_nack(status);
 }
 
-bool bp_scan() {
+bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
     bool ok = true;
     status status = OK;
     ok = ok && bp_reset(&status);
     ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
-    uint8_t id[UNIQUE_ID_LENGTH];
     uint8_t next_addr = FIRST_VALID_ADDRESS;
     uint8_t crc = 0;
     while (ok) {
-        for (uint8_t i = 0; i < sizeof(id) && ok; ++i) {
+        uint8_t *id = result[next_addr - FIRST_VALID_ADDRESS];
+        for (uint8_t i = 0; i < UNIQUE_ID_LENGTH && ok; ++i) {
             ok = bp_read_byte(&id[i], &status);
             // Nobody responded, meaning all device are enumerated
-            if (i == 0 && status == NO_ACK_OR_NACK)
+            if (i == 0 && status == NO_ACK_OR_NACK) {
+                *count = next_addr - FIRST_VALID_ADDRESS;
                 return true;
+            }
             crc = crc_update(UNIQUE_ID_CRC_POLY, crc, id[i]);
         }
 
@@ -215,7 +217,7 @@ bool bp_scan() {
 
         if (crc != 0) {
             Serial.print("Unique ID checksum error: ");
-            for (uint8_t i = 0; i < sizeof(id); ++i) {
+            for (uint8_t i = 0; i < UNIQUE_ID_LENGTH; ++i) {
                 if (id[i] < 0x10) Serial.print("0");
                 Serial.print(id[i], HEX);
             }
@@ -223,14 +225,7 @@ bool bp_scan() {
             return false;
         }
 
-        Serial.print("Device "); Serial.print(next_addr, HEX); Serial.print(" found with id: ");
-        for (uint8_t i = 0; i < sizeof(id); ++i) {
-            if (id[i] < 0x10) Serial.print("0");
-            Serial.print(id[i], HEX);
-        }
-        Serial.println();
-
-        if (next_addr++ == 4)
+        if (next_addr++ == FIRST_VALID_ADDRESS + *count)
             break;
     }
     return ok;
@@ -263,11 +258,22 @@ bool bp_write_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 void setup() {
     Serial.begin(115200);
     pinMode(3, OUTPUT);
+    pinMode(4, OUTPUT);
     digitalWrite(3, LOW);
 }
 
 uint8_t eeprom_written = false;
 
+void print_scan_result(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t count) {
+    for (uint8_t i = 0; i < count; ++ i) {
+        Serial.print("Device "); Serial.print(FIRST_VALID_ADDRESS + i, HEX); Serial.print(" found with id: ");
+        for (uint8_t j = 0; j < UNIQUE_ID_LENGTH; ++j) {
+            if (result[i][j] < 0x10) Serial.print("0");
+                Serial.print(result[i][j], HEX);
+        }
+        Serial.println();
+    }
+}
 
 void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
     Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" EEPROM:");
@@ -283,11 +289,15 @@ void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 
 void loop() {
     uint8_t buf[16];
+    uint8_t ids[4][8];
+    uint8_t count = sizeof(ids)/sizeof(*ids);
     delay(1000);
     Serial.println("Scanning...");
     digitalWrite(3, HIGH);
     digitalWrite(3, LOW);
-    bp_scan();
+    if (!bp_scan(ids, &count))
+        return;
+    print_scan_result(ids, count);
     delay(100);
     if (!eeprom_written) {
         print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
