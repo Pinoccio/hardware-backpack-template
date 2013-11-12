@@ -724,18 +724,20 @@ void loop(void)
                     break;
                 }
             }
-            // FALLTHROUGH
-        case STATE_READ_EEPROM_SEND_DATA:
-            // Read and send next EEPROM byte (but don't bother while
+            // Read and send next id byte (but don't bother while
             // we're muted)
             if (!(flags & FLAG_MUTE) || (flags & FLAG_CLEAR_MUTE))
                 byte_buf = EEPROM_read(next_byte);
             next_byte++;
-
+            action = ACTION_READY;
+            break;
+        case STATE_READ_EEPROM_SEND_DATA:
+            // Read and send next EEPROM byte
+            byte_buf = EEPROM_read(next_byte);
+            next_byte++;
             action = ACTION_READY;
             break;
         }
-
     }
 
     cli();
