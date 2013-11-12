@@ -575,8 +575,12 @@ void __attribute__((noinline)) loop(void);
 void setup(void)
 {
     action = ACTION_IDLE;
+
+    // Enable pullups on all ports except the bus pin (to save power)
+    PORTB = ~(1 << PINB1);
+
     // Set ports to output for debug
-    PORTB = DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
+    DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
 
     // On an INT0 interrupt, the counter is reset to tcnt_init, so it
     // overflows after RESET_SAMPLE ticks. OCR0A and OCR0B are set so
