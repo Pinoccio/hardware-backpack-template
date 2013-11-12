@@ -433,7 +433,7 @@ If not specfied, the name of this descriptor defaults to "spi".
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 2        | has name   | LSB first  | CPOL       | CPHA       | *reserved*                                        |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Maximum speed exponent               | Maximum speed significand                                      |
+        | 3        | Maximum speed exponent                            | Maximum speed significand                         |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         || 4       || last?     || Resource name                                                                           |
         || |vdots| || |vdots|   || |vdots|                                                                                 |
