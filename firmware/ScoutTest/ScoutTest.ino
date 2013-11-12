@@ -198,6 +198,11 @@ bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
     status status = OK;
     ok = ok && bp_reset(&status);
     ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
+    if (status == NO_ACK_OR_NACK) {
+        // Nobody on the bus
+        *count = 0;
+        return true;
+    }
     uint8_t next_addr = FIRST_VALID_ADDRESS;
     uint8_t crc = 0;
     while (ok) {
