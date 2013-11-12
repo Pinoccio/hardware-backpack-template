@@ -510,7 +510,17 @@ prepare_next_bit:
 ISR(TIM0_OVF_vect)
 {
     uint8_t val = PINB & (1 << PINB1);
-    if (!val && !(GIFR & (1 << INTF0))) {
+
+    // Disable all timer interrupts
+    TIMSK0 = 0;
+
+    /* If a falling edge interrupt was triggered between the timer
+     * overflow and us sampling the line, then return and handle that
+     * instead and ignore the timer. */
+    if (GIFR & (1 << INTF0))
+        return;
+
+    if (!val) {
         // Bus is low and the flag for INT0 is not set means the bus is
         // _still_ low. We have to check INTF0 to prevent a race
         // condition where the bus has been high and just goes low at
@@ -528,9 +538,6 @@ ISR(TIM0_OVF_vect)
         // Clear all flags, except for the enumeration status
         flags &= FLAG_ENUMERATED;
     }
-
-    // Disable all timer interrupts
-    TIMSK0 = 0;
 }
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
