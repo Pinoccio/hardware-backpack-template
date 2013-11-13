@@ -444,9 +444,8 @@ void loop() {
         // Write to the last address
         } else if (!bp_write_byte(EEPROM_SIZE - 1, &status)) {
             Serial.println("---> Valid write address rejected");
-        // Write byte (without changing it, b should still contain the
-        // byte read above).
-        } else if (!bp_write_byte(b, &status)) {
+        // Write byte (without changing it)
+        } else if (!bp_write_byte(eeproms[i][EEPROM_SIZE - 1], &status)) {
             Serial.println("---> Failed to write valid byte");
         // Write next (invalid) byte
         } else if (bp_write_byte(0, &status)) {
