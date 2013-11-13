@@ -339,8 +339,9 @@ void loop() {
     for (uint8_t i = 0; i < count; ++i) {
         if (!bp_read_eeprom(FIRST_VALID_ADDRESS + i, 0, eeproms[i], sizeof(*eeproms))) {
             Serial.print("---> EEPROM read failed for device "); Serial.println(FIRST_VALID_ADDRESS + i);
+        } else {
+            print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
         }
-        print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
         delay(100);
     }
 
