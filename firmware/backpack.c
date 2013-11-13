@@ -734,10 +734,14 @@ void loop(void)
             } else if (byte_buf != EEPROM_read(next_byte)) {
                 // Byte was actually changed. Write it, unless it is a
                 // read-only byte
-                if (next_byte >= UNIQUE_ID_OFFSET && next_byte < UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH)
+                if (next_byte >= UNIQUE_ID_OFFSET && next_byte < UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH) {
                     err_code = ERR_WRITE_EEPROM_READ_ONLY;
-                else
+                } else {
                     EEPROM_write(next_byte, byte_buf);
+                    // Check if the write completed succesfully
+                    if (byte_buf != EEPROM_read(next_byte))
+                        err_code = ERR_WRITE_EEPROM_FAILED;
+                }
             }
             next_byte++;
             action = ACTION_READY;
