@@ -37,6 +37,9 @@ size: backpack.elf
 read_eeprom:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U eeprom:r:-:h
 
+read_fuses:
+	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U hfuse:r:-:h -U lfuse:r:-:h
+
 # Write a random unique ID to eeprom. Variables can be override on the
 # commandline, e.g. make eeprom_id MODEL=0003
 eeprom_id: PROTO_VERSION:=01
