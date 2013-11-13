@@ -29,7 +29,7 @@
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xff:m -U lfuse:w:0x29:m
 //
 // TODO:
-//  - Decide on brownout detection and watchdog timer
+//  - Decide on brownout detection
 //  - In theory, a reset could happen when the main loop is processing
 //    something. Now, the main loop will happily overwrite the state set
 //    by the reset detection, but this should somehow be prevented
@@ -111,6 +111,7 @@
 #include <avr/interrupt.h>
 #include <avr/cpufunc.h>
 #include <avr/sleep.h>
+#include <avr/wdt.h>
 #include <util/delay.h>
 #include <stdbool.h>
 #include "protocol.h"
@@ -265,6 +266,18 @@ register uint8_t state asm("r8");
 // this error code
 register uint8_t err_code asm("r9");
 
+// Flags related to the WDT. Flags are set when the relevant event
+// occurs, and when all relevant flags are set, the watchdog timer is
+// reset and these flags are cleared.
+register uint8_t wdt_flags asm("r10");
+
+enum {
+    // Set when a byte was processed by the mainloop
+    WDT_PROGRESS = 1,
+    // Set when the line was observed to be high
+    WDT_LINE_HIGH = 2,
+};
+
 
 // Register that is used by TIM0_COMPA_vect() and
 // TIM0_COMPA_vect_do_work() to pass on the sampled value. This needs to
@@ -277,6 +290,51 @@ register uint8_t sample_val asm("r16");
 // immediately, without having to mess with freeing up a register and
 // loading the constant into it.
 register uint8_t tcnt0_init asm("r17");
+
+// Use a watchdog timeout of 32ms. The longest period the ISRs should be
+// busy without letting the mainloop work, should be 28 bits (4
+// handshaking bits, 8 databits with a parity error, another 4
+// handshaking bits including a NAK, another 8 databits containing a
+// parity error code and 4 handshaking bits including an ack). With
+// worst-case bus and oscillator timings, this should take 24ms. So,
+// timing out after 32ms seems reasonable.
+static uint8_t const WDTCR_SETTINGS = (1 << WDP0);
+
+// Enable the watchdog.
+// Unlike the wdt_disable function in avr-libc, this does not disable
+// interrupts (to save a few instructions), but this means they can only
+// be called when interrupts are already disabled.
+static inline void wdt_on() {
+    // Only act when the watchdog is disabled, to prevent continuously
+    // resetting the timer.
+    if (!(WDTCR & (1 << WDE))) {
+        // Reset the timer, to prevent it from triggering right away
+        wdt_reset();
+
+        // Even though the datasheet says you can't change the prescaler
+        // bits without doing the WDCE magic dance, turns you you can
+        // (even while setting WDCE!), so be sure to include them
+        // everywhere we write to WDTCR. In practice, it seems we could
+        // just suffice with the second line, without doing the dance,
+        // but let's be safe just to be sure.
+        WDTCR = (1 << WDCE) | (1 << WDE) | WDTCR_SETTINGS;
+        WDTCR = (1 << WDE) | WDTCR_SETTINGS;
+    }
+}
+
+// Disable the watchdog.
+// Unlike the wdt_disable function in avr-libc, this does not disable
+// interrupts (to save a few instructions), but this means they can only
+// be called when interrupts are already disabled.
+static inline void wdt_off() {
+    // Even though the datasheet says you can't change the prescaler
+    // bits without doing the WDCE magic dance, turns you you can (even
+    // while setting WDCE!), so be sure to include them everywhere we
+    // write to WDTCR (except when actually disabling WDE, since writing
+    // 0 is potentially more efficient).
+    WDTCR = (1 << WDCE) | (1 << WDE) | WDTCR_SETTINGS;
+    WDTCR = 0;
+}
 
 // This is the naked ISR that is called on INT0 interrupts. It
 // immediately clears the TCNT0 register so the time from the interrupt
@@ -332,6 +390,14 @@ ISR(__vector_bit_start)
     // ISC00 is not set)
     MCUCR |= (1<<ISC01);
     set_sleep_mode(SLEEP_MODE_IDLE);
+
+    // Normally, the mainloop checks the line and sets this flag.
+    // However, it can happen that the mainloop goes to sleep when the
+    // line is low, the MCU is woken up because of a falling edge and
+    // the mainloop continues running when the line is low again. The
+    // line will have been high, but the mainloop never sees that. We'll
+    // help them a bit by setting the flag here.
+    wdt_flags |= WDT_LINE_HIGH;
 
     // Don't bother doing either of these when we're muted
     if ((flags & FLAG_MUTE) && (action & AF_MUTE))
@@ -614,7 +680,11 @@ void __attribute__((noinline)) loop(void);
 void setup(void)
 {
     action = ACTION_IDLE;
-    flags = 0;
+    flags &= FLAG_ENUMERATED;
+    // Don't clear FLAG_ENUMERATED on a watchdog reset, so we don't
+    // forget our assigned address in this case.
+    if (!(MCUSR & (1 << WDRF)))
+        flags &= ~FLAG_ENUMERATED;
 
     // Enable pullups on all ports except the bus pin (to save power)
     PORTB = ~(1 << PINB1);
@@ -636,6 +706,10 @@ void setup(void)
     // Set timer to /8 prescaler, which, together with the CLKDIV8 fuse,
     // makes 4.8Mhz / 8 / 8 = 75kHz
     TCCR0B=(1<<CS01);
+
+    // Clear reset status flags (this is needed, since after a watchdog
+    // reset, WDRF is set which forces the watchdog to be on).
+    MCUSR = 0;
 
     // Enable sleeping, and set INT0 to falling-edge.
     //
@@ -795,9 +869,32 @@ void loop(void)
             err_code = ERR_READ_EEPROM_INVALID_ADDRESS;
             action = ACTION_READY;
         }
+        // We made some progress
+        wdt_flags |= WDT_PROGRESS;
+    }
+    if (PINB & (1 << PINB1))
+        wdt_flags |= WDT_LINE_HIGH;
+
+    // Reset the watchdog timer when:
+    //  - The line has been high since the last wdt reset, and
+    //  - We're idle, or we've processed a byte since that last wdt reset
+    //
+    //  This makes sure that we trigger a watchdog reset when:
+    //   - The line stays low for too long (regardless of who causes that)
+    //   - We're not idle, but also not making any progress for too long
+    //
+    if (wdt_flags & (WDT_LINE_HIGH) &&
+        (wdt_flags & WDT_PROGRESS || action == ACTION_IDLE)) {
+        wdt_reset();
+        wdt_flags = 0;
     }
 
     cli();
+    // Re-enable the watchdog if needed. Doing this here, instead of
+    // after the sleep below, saves us a cli instruction at the cost of
+    // re-enabling the watchdog timer a few cycles later
+    wdt_on();
+
     // Only sleep if the main loop isn't supposed to do anything, to
     // prevent deadlock. There's a magic dance here to make sure
     // an interrupt does not set the action to ACTION_STALL after we
@@ -812,6 +909,7 @@ void loop(void)
             // check it above, in that case we'll go into powerdown and
             // then come out of it directly again.
             set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+            wdt_off();
 
             // Make INT0 low-level triggered (note that this assumes ISC00
             // is not set)
