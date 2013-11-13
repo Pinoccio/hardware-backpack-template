@@ -1,8 +1,13 @@
 SERIAL=/dev/ttyUSB0
 PROGRAMMER=stk500
-GCC_MCU=attiny13
+GCC_MCU=attiny13a
+CRT_FILE=crttn13a.o
 AVRDUDE_PART=t13
 CFLAGS=-Wall -mmcu=$(GCC_MCU) -Os
+
+ifeq ($(shell avr-gcc $(CFLAGS) --print-file-name $(CRT_FILE)),$(CRT_FILE))
+$(error "Gcc couldn't find $(CRT_FILE), you probably haven't applied the /usr/lib/avr/lib/avr25/tiny-stack workaround suggested in backpack.c? Short version: run ln -s /usr/lib/avr/lib/avr25 /usr/lib/avr/lib/avr25/tiny-stack")
+endif
 
 # Don't use jump tables, they make the code bigger
 CFLAGS+=-fno-jump-tables

@@ -28,6 +28,14 @@
 // Fuse settings are 0xff and 0x29:
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xff:m -U lfuse:w:0x29:m
 //
+// Note that avr-libc 1.8.0 does not provide "tiny-stack" versions of
+// the crt*.o libraries but newer (suspectedly 4.7.1 and above) gcc
+// versions do expect those to exist (causing "ld: cannot find
+// crttn13a.o: No such file or directory"). As a workaround, suggested
+// by https://savannah.nongnu.org/bugs/?35407#comment0 you can run:
+//   # ln -s /usr/lib/avr/lib/avr25 /usr/lib/avr/lib/avr25/tiny-stack
+// to make gcc look in the right place.
+//
 // TODO:
 //  - Decide on brownout detection
 //  - In theory, a reset could happen when the main loop is processing
@@ -116,6 +124,16 @@
 #include <stdbool.h>
 #include "protocol.h"
 
+// Workarounds for typos in iotn13a.h, see
+// https://savannah.nongnu.org/bugs/?40567
+#if defined(BPDS) && !defined(BODS)
+#define BODS BPDS
+#define BODSE BPDSE
+#endif
+#if defined(EEWE) && !defined(EEPE)
+#define EEPE EEWE
+#define EEMPE EEMWE
+#endif
 
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
 #define pulse(pin) \
