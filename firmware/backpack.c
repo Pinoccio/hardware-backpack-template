@@ -614,6 +614,7 @@ void __attribute__((noinline)) loop(void);
 void setup(void)
 {
     action = ACTION_IDLE;
+    flags = 0;
 
     // Enable pullups on all ports except the bus pin (to save power)
     PORTB = ~(1 << PINB1);
