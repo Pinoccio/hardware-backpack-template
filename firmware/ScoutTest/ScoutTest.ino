@@ -28,6 +28,9 @@
 #define SAMPLE_DELAY 250
 #define IDLE_DELAY 50
 
+// Should perhaps be read from EEPROM, but for now hardcoding is fine
+#define EEPROM_SIZE 64
+
 #include "../protocol.h"
 #include "crc.h"
 
@@ -318,7 +321,7 @@ void print_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
 
 void loop() {
     uint8_t ids[4][8];
-    uint8_t eeproms[4][64];
+    uint8_t eeproms[4][EEPROM_SIZE];
     uint8_t count = sizeof(ids)/sizeof(*ids);
     uint8_t b;
     status status = {OK, 0};
@@ -385,8 +388,8 @@ void loop() {
         // Write a read EEPROM command
         } else if (!bp_write_byte(CMD_READ_EEPROM, &status)) {
             Serial.println("---> Read EEPROM command failed");
-        // Read from address 100
-        } else if (bp_write_byte(100, &status)) {
+        // Read from an invalid address
+        } else if (bp_write_byte(2 * EEPROM_SIZE, &status)) {
             Serial.println("---> Invalid address not rejected");
         } else if (status.code != NACK) {
             Serial.print("---> No NACK or no error code received after invalid address, but: "); Serial.println(status.code);
@@ -407,8 +410,8 @@ void loop() {
         // Write a read EEPROM command
         } else if (!bp_write_byte(CMD_READ_EEPROM, &status)) {
             Serial.println("---> Read EEPROM command failed");
-        // Read from address 63
-        } else if (!bp_write_byte(63, &status)) {
+        // Read from the last address
+        } else if (!bp_write_byte(EEPROM_SIZE - 1, &status)) {
             Serial.println("---> Valid address rejected");
         // Read first (valid) byte
         } else if (!bp_read_byte(&b, &status)) {
@@ -435,8 +438,8 @@ void loop() {
         // Write a read EEPROM command
         } else if (!bp_write_byte(CMD_WRITE_EEPROM, &status)) {
             Serial.println("---> Write EEPROM command failed");
-        // Write to address 63
-        } else if (!bp_write_byte(63, &status)) {
+        // Write to the last address
+        } else if (!bp_write_byte(EEPROM_SIZE - 1, &status)) {
             Serial.println("---> Valid address rejected");
         // Write byte (without changing it, b should still contain the
         // byte read above).
