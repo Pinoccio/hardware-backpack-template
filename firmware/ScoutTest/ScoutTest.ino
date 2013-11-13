@@ -332,19 +332,6 @@ void loop() {
         return;
     print_scan_result(ids, count);
     delay(100);
-    if (!eeprom_written && count) {
-        print_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
-        Serial.print("Incrementing all EEPROM bytes of device 0: ");
-        for (size_t i = 0; i < sizeof(buf); ++i) {
-            buf[i]++;
-            if (buf[i] < 0x10) Serial.print("0");
-            Serial.print(buf[i], HEX);
-        }
-        Serial.println();
-        bp_write_eeprom(FIRST_VALID_ADDRESS, 0, buf, sizeof(buf));
-        eeprom_written = true;
-        delay(100);
-    }
     Serial.println("Reading EEPROM...");
     for (uint8_t i = 0; i < count; ++i) {
         print_eeprom(FIRST_VALID_ADDRESS + i, 0, buf, sizeof(buf));
