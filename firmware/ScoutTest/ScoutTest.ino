@@ -306,11 +306,9 @@ void print_scan_result(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t count) {
     }
 }
 
-void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
+void print_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
     Serial.print("Device "); Serial.print(addr, HEX); Serial.println(" EEPROM:");
     Serial.print("  ");
-    if (!bp_read_eeprom(addr, offset, buf, len))
-        return;
     while (len--) {
         if (*buf < 0x10) Serial.print("0");
         Serial.print(*buf++, HEX);
@@ -319,8 +317,8 @@ void print_eeprom(uint8_t addr, uint8_t offset, uint8_t *buf, uint8_t len) {
 }
 
 void loop() {
-    uint8_t buf[16];
     uint8_t ids[4][8];
+    uint8_t eeproms[4][64];
     uint8_t count = sizeof(ids)/sizeof(*ids);
     uint8_t b;
     status status = {OK, 0};
@@ -334,7 +332,10 @@ void loop() {
     delay(100);
     Serial.println("Reading EEPROM...");
     for (uint8_t i = 0; i < count; ++i) {
-        print_eeprom(FIRST_VALID_ADDRESS + i, 0, buf, sizeof(buf));
+        if (!bp_read_eeprom(FIRST_VALID_ADDRESS + i, 0, eeproms[i], sizeof(*eeproms))) {
+            Serial.print("---> EEPROM read failed for device "); Serial.println(FIRST_VALID_ADDRESS + i);
+        }
+        print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
         delay(100);
     }
 
