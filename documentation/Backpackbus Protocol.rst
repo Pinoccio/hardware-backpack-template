@@ -667,21 +667,10 @@ the master keeps reading data.
 When the address byte sent is beyond the end of the EEPROM, a nack is
 sent with an "Invalid address" error code.
 
-When the last byte of the EEPROM is read, that byte is sent as normal,
-followed by a nack and the "end of EEPROM" error code. In this case, the
-byte itself is valid, but no further bytes can be read.
-
-.. admonition:: Open Question: End of EEPROM error?
-
-        Should this work like described, or should the last byte be
-        acked as normal and the next byte send dummy data and a nack?
-        The latter seems to make some more sense, but is probably harder
-        to implement. Also, the meaning of the nak bit was also to
-        indicate an error with processing the previous byte or preparing
-        the next byte, and the error code clarifies which of the two
-        cases is actually happening...
-
-        Same thing applies to EEPROM write.
+When the last byte of the EEPROM is read, that byte is sent and acked as
+normal. When another byte is read, which would cause a read outside of
+the EEPROM, an undefined value is returned which is then nacked,
+followed by the "Invalid address" error code.
 
 =====  =========  =========
 Bytes  Direction  Purpose
@@ -697,7 +686,6 @@ Bytes  Direction  Purpose
         Code    Meaning
         ======  =================
         0xff    Invalid address
-        0xfe    End of EEPROM
         ======  =================
 
 ------------
@@ -711,10 +699,10 @@ master continues to transmit bytes.
 When the address byte sent is beyond the end of the EEPROM, a nack is
 sent with an "Invalid address" error code.
 
-When the last byte of the EEPROM is written, that byte is received and
-written as normal, followed by a nack and the "end of EEPROM" error
-code. In this case, the byte was succesfully written, but no further
-bytes can be read.
+When the last byte of the EEPROM is written, that byte is received,
+written and acked as normal. If another byte is written after that,
+which would end up outside of the EEPROM, it is nacked and the "Invalid
+address" error code is returned.
 
 Some bytes in the EEPROM might be read-only and cannot be written.
 Typically, the bytes storing unique id cannot be changed through this
@@ -743,9 +731,8 @@ Bytes  Direction  Purpose
         Code    Meaning
         ======  =================
         0xff    Invalid address
-        0xfe    End of EEPROM
-        0xfd    Read only byte
-        0xfc    Write failed
+        0xfe    Read only byte
+        0xfd    Write failed
         ======  =================
 
 =================================
