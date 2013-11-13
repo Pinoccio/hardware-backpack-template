@@ -329,8 +329,10 @@ void loop() {
     Serial.println("Scanning...");
     digitalWrite(3, HIGH);
     digitalWrite(3, LOW);
-    if (!bp_scan(ids, &count))
+    if (!bp_scan(ids, &count)) {
+        Serial.println("---> Enumeration failed");
         return;
+    }
     print_scan_result(ids, count);
     delay(100);
     Serial.println("Reading EEPROM...");
@@ -345,8 +347,9 @@ void loop() {
     for (uint8_t i = 0; i < count; ++i) {
         Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
         Serial.println("Only errors prefixed with ---> are unexpected");
+
         bp_reset();
-        // Send a normal addressing byte
+        // Send a parity error
         if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
             Serial.println("---> Adressing failed?");
         // Write a command with a parity error
@@ -365,7 +368,7 @@ void loop() {
 
         bp_reset();
         status.code = OK;
-        // Send a normal addressing byte
+        // Send an unknown command
         if (!bp_write_byte(FIRST_VALID_ADDRESS + i, &status)) {
             Serial.println("---> Adressing failed?");
         // Write an unknown command
@@ -390,16 +393,16 @@ void loop() {
             Serial.println("---> Read EEPROM command failed");
         // Read from an invalid address
         } else if (bp_write_byte(2 * EEPROM_SIZE, &status)) {
-            Serial.println("---> Invalid address not rejected");
+            Serial.println("---> Invalid read address not rejected");
         } else if (status.code != NACK) {
-            Serial.print("---> No NACK or no error code received after invalid address, but: "); Serial.println(status.code);
+            Serial.print("---> No NACK or no error code received after invalid read address, but: "); Serial.println(status.code);
         } else if (status.slave_code != ERR_READ_EEPROM_INVALID_ADDRESS) {
-            Serial.print("---> Not invalid address error code: "); Serial.println(b);
+            Serial.print("---> Not invalid read address error code: "); Serial.println(b);
         // Read a byte to see if anyone is still on the bus...
         } else if ((status.code = OK) == OK &&
                    (bp_read_byte(&b, &status) ||
                     status.code != NO_ACK_OR_NACK)) {
-            Serial.println("---> Bus not empty after invalid address error");
+            Serial.println("---> Bus not empty after invalid read address error");
         }
 
         bp_reset();
@@ -412,7 +415,7 @@ void loop() {
             Serial.println("---> Read EEPROM command failed");
         // Read from the last address
         } else if (!bp_write_byte(EEPROM_SIZE - 1, &status)) {
-            Serial.println("---> Valid address rejected");
+            Serial.println("---> Valid read address rejected");
         // Read first (valid) byte
         } else if (!bp_read_byte(&b, &status)) {
             Serial.println("---> Failed to read valid byte");
@@ -427,7 +430,7 @@ void loop() {
         } else if ((status.code = OK) == OK &&
                    (bp_read_byte(&b, &status) ||
                     status.code != NO_ACK_OR_NACK)) {
-            Serial.println("---> Bus not empty after invalid write address error");
+            Serial.println("---> Bus not empty after read address overflow error");
         }
 
         bp_reset();
@@ -440,7 +443,7 @@ void loop() {
             Serial.println("---> Write EEPROM command failed");
         // Write to the last address
         } else if (!bp_write_byte(EEPROM_SIZE - 1, &status)) {
-            Serial.println("---> Valid address rejected");
+            Serial.println("---> Valid write address rejected");
         // Write byte (without changing it, b should still contain the
         // byte read above).
         } else if (!bp_write_byte(b, &status)) {
@@ -456,7 +459,7 @@ void loop() {
         } else if ((status.code = OK) == OK &&
                    (bp_read_byte(&b, &status) ||
                     status.code != NO_ACK_OR_NACK)) {
-            Serial.println("---> Bus not empty after invalid write address error");
+            Serial.println("---> Bus not empty after write address overflow error");
         }
 
         bp_reset();
@@ -466,22 +469,22 @@ void loop() {
             Serial.println("---> Adressing failed?");
         // Write a read eeprom command
         } else if (!bp_write_byte(CMD_WRITE_EEPROM, &status)) {
-            Serial.println("---> Read EEPROM command failed");
+            Serial.println("---> Write EEPROM command failed");
         // Write the address of the supported protocol version
         } else if (!bp_write_byte(0, &status)) {
-            Serial.println("---> Valid address rejected");
-        // Write a different byte into position 0
+            Serial.println("---> Valid write address rejected");
+        // Try to write a different byte into position 0
         } else if (bp_write_byte(ids[i][0] + 1, &status)) {
             Serial.println("---> Writing read-only byte not rejected");
         } else if (status.code != NACK) {
-            Serial.print("---> No NACK or no error code received after address overflow, but: "); Serial.println(status.code);
+            Serial.print("---> No NACK or no error code received after writing read-only byte, but: "); Serial.println(status.code);
         } else if (status.slave_code != ERR_WRITE_EEPROM_READ_ONLY) {
-            Serial.print("---> Not invalid address error code: "); Serial.println(b);
+            Serial.print("---> Not read-only error code: "); Serial.println(b);
         // Read a byte to see if anyone is still on the bus...
         } else if ((status.code = OK) == OK &&
                    (bp_read_byte(&b, &status) ||
                     status.code != NO_ACK_OR_NACK)) {
-            Serial.println("---> Bus not empty after invalid address error");
+            Serial.println("---> Bus not empty after read-only error");
         }
 
         bp_reset();
@@ -494,7 +497,7 @@ void loop() {
             Serial.println("---> Read EEPROM command failed");
         // Write the address of the supported protocol version
         } else if (!bp_write_byte(0, &status)) {
-            Serial.println("---> Valid address rejected");
+            Serial.println("---> Valid write address rejected");
         // Write an unchanged byte into position 0
         } else if (!bp_write_byte(ids[i][0], &status)) {
             Serial.println("---> Writing read-only byte with unchanged value failed");
