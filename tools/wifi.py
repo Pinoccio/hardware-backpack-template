@@ -20,6 +20,7 @@ contents = EEPROM(
     serial                = 1,
     hardware_revision     = 3,
     firmware_version      = 1,
+    name                  = "wifi",
     groups = [
         GroupDescriptor(
             name = "wifi",

@@ -93,6 +93,9 @@ The header contains the following info. Offset and size is in bytes.
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | a        | Firmware version                                                                                      |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || b       || last?     || Backpack name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 The backpack unique id contains a few subfields. See the Pinoccio
 Backpack Bus Protocol specification for how the id is composed.
@@ -107,6 +110,16 @@ particular form for this field, but a simple incrementing number seems
 reasonable. Furthermore, this version does not need to be globally
 unique. Instead, it is expected to be meaningful only within the same
 backpack model.
+
+The backpack name gives a short name for the backpack, that can be used
+to identify the backpack when multiple backpacks are connected to the
+scout. In general, this name should be the same for all backpacks with
+the same model identifier (regardless of hardware version). It's also
+not forbidden for two backpacks with different model identifiers to use
+the same name. The name is mostly intended for user display, actual code
+running on the scout should use the model identifier to select backpacks
+to talk to instead. The format of the name is the same as that used for
+descriptor names, see below.
 
 .. admonition:: Rationale: Firmware version
 

@@ -16,7 +16,7 @@ class EEPROM:
 
     def __init__(self, layout_version, eeprom_size,
                  bus_protocol_version, model, hardware_revision,
-                 serial, firmware_version, groups):
+                 serial, firmware_version, name, groups):
         self.layout_version = layout_version
         self.eeprom_size = eeprom_size
         self.bus_protocol_version = bus_protocol_version
@@ -24,6 +24,7 @@ class EEPROM:
         self.hardware_revision = hardware_revision
         self.serial = serial
         self.firmware_version = firmware_version
+        self.name = name
         self.groups = groups
         self.data = None
 
@@ -91,3 +92,18 @@ class EEPROM:
         uid.append(pack('uint:8', unique_id_crc(uid.bytes)))
         data.append(uid)
         data.append(pack('uintbe:16', self.firmware_version))
+        self.append_string(data, self.name)
+
+    def append_string(self, data, s):
+        """
+        Append a string of characters to the given BitArray. Characters
+        are encoded as ASCII, with the MSB set to 1 for the last
+        character in the string.
+        """
+        if s:
+            for c in s.encode('ascii'):
+                data.append(pack('uint:8', c))
+
+            # Set the MSB of the last byte to signal the end of the
+            # string
+            data[-8] = 1;

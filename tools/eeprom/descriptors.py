@@ -23,20 +23,6 @@ class Descriptor:
                 raise ValueError("Name cannot be empty for {}".format(self.__class__.__name__))
         return self.name
 
-    def append_string(self, data, s):
-        """
-        Append a string of characters to the given BitArray. Characters
-        are encoded as ASCII, with the MSB set to 1 for the last
-        character in the string.
-        """
-        if s:
-            for c in s.encode('ascii'):
-                data.append(pack('uint:8', c))
-
-            # Set the MSB of the last byte to signal the end of the
-            # string
-            data[-8] = 1;
-
     def append_minifloat(self, eeprom, data, format, unit, value):
         if value is None:
             e = s = 0
@@ -71,7 +57,7 @@ class SpiSlaveDescriptor(Descriptor):
         data.append(pack('bool', self.CPHA))
         data.append(pack('pad:4')) # reserved
         self.append_minifloat(eeprom, data, self.speed_format, self.speed_unit, self.speed)
-        self.append_string(data, self.name)
+        eeprom.append_string(data, self.name)
 
 class UartDescriptor(Descriptor):
     descriptor_type = 0x2
@@ -118,7 +104,7 @@ class UartDescriptor(Descriptor):
         data.append(pack('bool', bool(self.name)))
         data.append(pack('pad:3')) # reserved
         data.append(pack('uint:4', self.encoded_speed(eeprom)))
-        self.append_string(data, self.name)
+        eeprom.append_string(data, self.name)
 
 class IOPinDescriptor(Descriptor):
     descriptor_type = 0x3
@@ -131,7 +117,7 @@ class IOPinDescriptor(Descriptor):
         data.append(pack('uint:8', self.descriptor_type))
         data.append(pack('pad:2')) # reserved
         data.append(pack('uint:6', self.pin))
-        self.append_string(data, self.name)
+        eeprom.append_string(data, self.name)
 
 class PowerUsageDescriptor(Descriptor):
     descriptor_type = 0x5
@@ -175,7 +161,7 @@ class GroupDescriptor(Descriptor):
     def encode(self, eeprom, data):
         if self.name:
             data.append(pack('uint:8', self.descriptor_type))
-            self.append_string(data, self.name)
+            eeprom.append_string(data, self.name)
 
         for d in self.descriptors:
             d.encode(eeprom, data)
