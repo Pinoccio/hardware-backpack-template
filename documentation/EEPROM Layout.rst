@@ -340,7 +340,7 @@ A name must be specified for this descriptor, there is no default.
         || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
-.. admonition:: Open Question: Group types / metadata
+.. admonition:: Future Expansion: Group types / metadata
 
         Does this descriptor need some kind of group type (physical
         section / IC / logical section / ...) field or other metadata?
@@ -572,7 +572,7 @@ I/O pin resource.
 
 Power pins, including GND do not need to be explicitly specified either.
 
-.. admonition:: Open Question: Usage field and metadata
+.. admonition:: Future expansion: Usage field and metadata
 
         In the original discussion, a "pin usage" field was proposed.
         However, it's not quite clear what kind of values this should
@@ -829,15 +829,6 @@ the header bytes and name bytes.
         and write this data and that it will be the same code that
         accesses the data every time.
 
-.. admonition:: Open Question:: Multiple data types
-
-        Would it make sense to have a dozen or so data types, so a
-        library can store different kinds of data without having to add
-        another "subtype" byte?
-
-        Or would it perhaps make sense to give this descriptor a name as
-        well and use that to identify subtypes?
-
 Empty
 """""
 This descriptor does not contain any data. Instead, it just repeats the
@@ -1011,7 +1002,7 @@ will also flag an "unsupported EEPROM layout" error).
 For the same reason, adding new values to an enumeration field (*e.g.*,
 adding a new UART speed) can also happen with just a mnior version bump.
 
-.. admonition:: Open Question: Configurable parameters
+.. admonition:: Future Expansion: Configurable parameters
 
         In the future, we'd like to use the tiny to configure some
         parameters as well. Obvious usecase is to set an I²C address
