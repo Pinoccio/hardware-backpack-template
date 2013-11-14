@@ -655,6 +655,9 @@ ISR(TIM0_OVF_vect)
     }
 }
 
+/* Don't use avr-libc's eeprom_read/update_byte functions, since those
+ * produce significantly bigger code (partly because they use 16-bit
+ * addresses, partly for lack of lto probably. */
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData)
 {
       /* Wait for completion of previous write */
