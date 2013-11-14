@@ -721,6 +721,10 @@ void setup(void)
     // Set ports to output for debug
     #if defined(DEBUG)
     DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
+
+    // Bring PINB0 low after a watchdog reset
+    if ((MCUSR & (1 << WDRF)))
+        PORTB &= ~(1 << PINB0);
     #endif
 
     // On an INT0 interrupt, the counter is reset to tcnt_init, so it
