@@ -40,8 +40,7 @@ contents = EEPROM(
                 ),
 
                 IOPinDescriptor(
-                    # TODO: Better / shorter name?
-                    name   = "upgrade",
+                    name   = "pgm",
                     pin    = pins.D6,
                 ),
                 PowerUsageDescriptor(
