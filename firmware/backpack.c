@@ -25,8 +25,8 @@
 // To flash:
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U flash:w:backpack.hex
 //
-// Fuse settings are 0xff and 0x29:
-//   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xff:m -U lfuse:w:0x29:m
+// Fuse settings are 0xff and 0x21:
+//   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xfb:m -U lfuse:w:0x29:m
 //
 // Note that avr-libc 1.8.0 does not provide "tiny-stack" versions of
 // the crt*.o libraries but newer (suspectedly 4.7.1 and above) gcc
@@ -37,7 +37,6 @@
 // to make gcc look in the right place.
 //
 // TODO:
-//  - Decide on brownout detection
 //  - In theory, a reset could happen when the main loop is processing
 //    something. Now, the main loop will happily overwrite the state set
 //    by the reset detection, but this should somehow be prevented
@@ -918,7 +917,7 @@ void loop(void)
     // an interrupt does not set the action to ACTION_STALL after we
     // checked for it but before entering sleep mode
     if (action != ACTION_STALL) {
-        if (!TIMSK0 && (PINB & (1 << PINB1))) {
+        if (action == ACTION_IDLE && !TIMSK0 && (PINB & (1 << PINB1))) {
             // No timers are running, so we can go to power down mode
             // (where timers stop running) instead of sleep mode.  Since
             // we can only wake up from powerdown on a low-level
@@ -931,10 +930,19 @@ void loop(void)
 
             // Make INT0 low-level triggered (note that this assumes ISC00
             // is not set)
-            MCUCR &= ~(1<<ISC01);
-
             // The INT0 handler takes care of making itself
             // edge-triggered again and also reset the sleep mode
+            MCUCR &= ~(1<<ISC01);
+
+            // Disable the brown-out detector during sleep in order to
+            // save some power (at the cost of a slightly higher wakeup
+            // time, but that's ok since we expect a reset pulse next).
+            // This register is not available on the tiny13, only on
+            // tiny13a
+            #if defined(BODCR)
+            BODCR = (1 << BODSE);
+            BODCR = (1 << BODS);
+            #endif
         }
         // The instruction after sei is guaranteed to execute before
         // any interrupts are triggered, so we can be sure the sleep
