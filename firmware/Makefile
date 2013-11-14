@@ -55,4 +55,4 @@ eeprom_id:
 
 # Output assembly with addresses removed for easy diffing
 diffdump: backpack.elf
-	avr-objdump -S $< | sed 's/^[0-9a-f]* </</' | sed 's/^ *[0-9a-f]*://' | sed -r 's/([0-9a-f]{2} )*\s*((brne|rjmp|rcall|breq|brcc|brlt)\s*).*/...\t\t\2.../'
+	avr-objdump -S $< | sed 's/^[0-9a-f]* </</' | sed 's/^ *[0-9a-f]*://' | sed -r 's/([0-9a-f]{2} )*\s*((rjmp|rcall|br..)\s+).*/xx xx\t\t\2.../'
