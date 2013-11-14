@@ -442,9 +442,7 @@ If not specfied, the name of this descriptor defaults to "spi".
         +==========+============+============+============+============+============+============+============+============+
         | 0        | Descriptor type                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*              | Slave select pin number                                                     |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | has name   | LSB first  | CPOL       | CPHA       | *reserved*                                        |
+        | 1        |  has name  | *reserved* | Slave select pin number                                                     |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 3        | Maximum speed exponent                            | Maximum speed significand                         |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
@@ -452,8 +450,9 @@ If not specfied, the name of this descriptor defaults to "spi".
         || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
-LSB first indicates wether the device expects to transfer the most
-significant or least significant bit first.
+The SPI slave device is assumed to send and receive bytes with the
+most-significant bit first, and use "SPI mode 0" (CPOL = 0 and CPHA =
+0).
 
 The CPOL and CPHA bits represent the clock polarity and phase. CPOL
 represents the idle state of the clock, and CPHA indicates where in the
@@ -461,6 +460,17 @@ clock cycle the data is captured and shifted. These terms have been
 defined in the `SPI Block Guide`_ by Freescale Semiconductor.
 
 .. _SPI Block Guide: http://www.ee.nmt.edu/~teare/ee308l/datasheets/S12SPIV3.pdf
+
+.. admonition:: No CPOL, CPHA and lsb first fields
+
+        An earlier draft of this spec included fields for these
+        properties. Most devices seem to use MSB first, CPOL = 0 and
+        CPHA = 0, but it makes sense to allow specifying other settings.
+
+        However, for the first version of this layout these fields were
+        removed to save a bit of space, so the wifi backpack descriptors
+        would fit in the EEPROM available. Future backpacks will
+        probably have a slightly bigger chip.
 
 The SPI speed uses a minifloat format that expresses the speed in Mhz.
 

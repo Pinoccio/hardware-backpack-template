@@ -39,23 +39,16 @@ class SpiSlaveDescriptor(Descriptor):
     speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
     speed_unit = 'Mhz'
 
-    def __init__(self, speed, ss_pin, lsb_first, CPOL, CPHA, name = ""):
+    def __init__(self, speed, ss_pin, name = ""):
         self.name = name
         self.speed = speed
         self.ss_pin = ss_pin
-        self.lsb_first = lsb_first
-        self.CPOL = CPOL
-        self.CPHA = CPHA
 
     def encode(self, eeprom, data):
         data.append(pack('uint:8', self.descriptor_type))
-        data.append(pack('pad:2')) # reserved
-        data.append(pack('uint:6', self.ss_pin))
         data.append(pack('bool', bool(self.name)))
-        data.append(pack('bool', self.lsb_first))
-        data.append(pack('bool', self.CPOL))
-        data.append(pack('bool', self.CPHA))
-        data.append(pack('pad:4')) # reserved
+        data.append(pack('pad:1')) # reserved
+        data.append(pack('uint:6', self.ss_pin))
         self.append_minifloat(eeprom, data, self.speed_format, self.speed_unit, self.speed)
         eeprom.append_string(data, self.name)
 

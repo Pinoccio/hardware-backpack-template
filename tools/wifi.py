@@ -28,9 +28,6 @@ contents = EEPROM(
                 SpiSlaveDescriptor(
                     ss_pin = pins.D7,
                     speed = None, # TODO
-                    CPOL = 0,
-                    CPHA = 0,
-                    lsb_first = 0,
                 ),
 
                 UartDescriptor(
@@ -59,9 +56,6 @@ contents = EEPROM(
                 SpiSlaveDescriptor(
                     ss_pin = pins.D8,
                     speed = None, # TODO
-                    CPOL = 0,
-                    CPHA = 0,
-                    lsb_first = 0,
                 ),
                 PowerUsageDescriptor(
                     pin     = pins.V33,
@@ -80,9 +74,6 @@ contents = EEPROM(
                     ss_pin = pins.SS,
                     # TODO, is this really 33Mhz?
                     speed = 33,
-                    CPOL = 0,
-                    CPHA = 0,
-                    lsb_first = 0,
                 ),
                 PowerUsageDescriptor(
                     pin     = pins.V33,
