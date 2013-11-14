@@ -144,8 +144,6 @@ class EmptyDescriptor(Descriptor):
 
 class GroupDescriptor(Descriptor):
     descriptor_type = 0x4
-    # Only valid for the first group
-    default_name = ""
 
     def __init__(self, name, descriptors):
         self.name = name
@@ -153,9 +151,8 @@ class GroupDescriptor(Descriptor):
 
     def encode(self, eeprom, data):
         eeprom.offsets[data.len // 8] = "Group " + self.name
-        if self.name:
-            data.append(pack('uint:8', self.descriptor_type))
-            eeprom.append_string(data, self.name)
+        data.append(pack('uint:8', self.descriptor_type))
+        eeprom.append_string(data, self.name)
 
         for d in self.descriptors:
             eeprom.offsets[data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")

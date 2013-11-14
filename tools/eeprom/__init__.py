@@ -48,11 +48,6 @@ class EEPROM:
         """
         self.check_unique_names(self.groups)
 
-        for i, g in enumerate(self.groups):
-            self.check_unique_names(g.descriptors)
-            if i != 0 and not g.name:
-                raise ValueError("Only the first group can have an empty name")
-
     def encode(self):
         """
         Generate the encoded EEPROM contents as a bytestring.

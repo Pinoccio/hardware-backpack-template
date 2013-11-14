@@ -237,68 +237,37 @@ Groups are typically used to group subparts of a backpack and can help
 to remove redundancy in descriptor names.
 
 Any descriptors following a group descriptor, up to the next group
-descriptor are considered to be inside the group. Any descriptors before
-the first group descriptor are considered to be inside an implicitly
-declared group with an empty name.
+descriptor are considered to be inside the group.
 
-.. admonition:: Group-less descriptors
+The first descriptor in the EEPROM must be a group descriptor, so that
+all other descriptors belong to exactly one group.
 
-        Instead of grouping all group-less descriptors together in a
-        single group, we could also specify that they will each get
-        their own group. For example, on the wifi backpack, you could
-        have::
+.. admonition:: Future expansion: Group-less descriptors
 
-          group: wifi
-                  spi
-                  uart
-                  pin: upgrade
-          spi: eep
-          spi: sd
+        The current version of the layout requires the first descriptor
+        te be a group, so all others are grouped.
 
-        This would create three groups, "wifi", "eep" and "sd", where
-        the latter two just contain a single spi descriptor with the
-        default name.
+        In future versions, it could be allowed to place descriptors
+        before the first group descriptor. Before, two possible meanings
+        for this have been considered:
 
-        Moving the given name from the descriptor to the implicitly
-        created group and using the default name for the descriptor will
-        always work (wrt to uniqueness), since the descriptor will
-        always end up alone it is group.
+        1. An implicit unnamed group is created to collect all these
+           ungrouped descriptors.
+        2. Each ungrouped descriptor gets its own implicit group.
 
-        In the current specification, you'd have to add two more
-        explicit group descriptors, or have inconsistently named
-        descriptors: (wifi, spi) for the wifi spi and ("", eep) for the
-        eeprom spi.
+        The first option seems good for backpacks that don't really need
+        any groups and just need everything in a single unnamed group.
+        However, they could also just have a single group descriptor at
+        the start (and if they don't need groups, they're likely small
+        and should have plenty or space available).
 
-        A possible complication here is the power usage descriptors: If
-        you want to add a power usage descriptor to every group, you'd
-        still have to add explicit group descriptors...
+        The second option seems gooed for backpack that have a multiple
+        parts that just need a single descriptor each. However, if you
+        want to also describe the power usage of each part, this breaks
+        again.
 
-        However, for a backpack that just contains a single device (say,
-        the wifi backpack without the eeprom and sd), you'd want to
-        write something like::
-
-          spi
-          uart
-          pin: upgrade
-
-        In the current spec, you'd get three descriptors: ("", spi),
-        ("", uart) and ("", upgrade). Creating implicit groups is not
-        possible for spi and uart (for lack of a name, creating (spi,
-        spi) or (upgrade, upgrade) is really unhelpful). Basing the
-        creation of this implicit group on wether a descriptor is
-        probably confusing.
-
-        Of course, we could just say that if a backpack contains just a
-        single part, but needs multiple descriptors, it should always
-        just explicitely declare a single group (even if it just has a
-        generic name like "dev").
-
-        The above example then just becomes:
-
-          group: wifi
-                  spi
-                  uart
-                  pin: upgrade
+        In general, the first option seems best, but perhaps a third
+        option will become clear in the future.
 
 ----------------
 Descriptor names
