@@ -59,6 +59,7 @@ class EEPROM:
         """
         # Keep a list of rounded values, for user feedback
         self.roundings = []
+        self.offsets = {}
 
         self.check()
 
@@ -72,6 +73,7 @@ class EEPROM:
             raise ValueError("Not an integer number of bytes: {} bits".format(len(data)))
 
         # append the checksum descriptor
+        self.offsets[data.len // 8] = "Checksum"
         data.append(pack('uint:8', self.checksum_descriptor_type))
         data.append(pack('uintbe:16', eeprom_crc(data.bytes)))
 

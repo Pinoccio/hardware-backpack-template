@@ -152,9 +152,11 @@ class GroupDescriptor(Descriptor):
         self.descriptors = descriptors
 
     def encode(self, eeprom, data):
+        eeprom.offsets[data.len // 8] = "Group " + self.name
         if self.name:
             data.append(pack('uint:8', self.descriptor_type))
             eeprom.append_string(data, self.name)
 
         for d in self.descriptors:
+            eeprom.offsets[data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")
             d.encode(eeprom, data)

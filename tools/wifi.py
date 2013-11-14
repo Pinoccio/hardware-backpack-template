@@ -88,17 +88,20 @@ contents = EEPROM(
 )
 
 # Print offset: binary hex
-def pretty(bs):
+def pretty(bs, eeprom):
     for i, byte in enumerate(bs.cut(8)):
+        if i in eeprom.offsets:
+            print(eeprom.offsets[i])
+
         val = byte.uint
-        out = "{0:02x}: {1:08b} {1:02x}".format(i, val)
+        out = "     {0:02x}: {1:08b} {1:02x}".format(i, val)
         val &= 0x7f
         if (val >= 0x20 and val < 0x7f):
             out += " \"{}\"".format(chr(val))
         print(out)
 
 encoded, roundings = contents.encode()
-pretty(encoded)
+pretty(encoded, contents)
 if (roundings):
     print("Roundings:")
     print("\n".join(roundings))
