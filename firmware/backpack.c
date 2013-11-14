@@ -135,10 +135,14 @@
 #endif
 
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
+#if defined(DEBUG)
 #define pulse(pin) \
     PORTB &= ~(1 << pin); \
     {uint8_t i; for (i=0;i<3;++i) _NOP();} \
     PORTB |= (1 << pin);
+#else
+#define pulse(pin)
+#endif
 
 // Offset of the unique ID within the EEPROM
 uint8_t const UNIQUE_ID_OFFSET = 0;
@@ -715,7 +719,9 @@ void setup(void)
     #endif
 
     // Set ports to output for debug
+    #if defined(DEBUG)
     DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
+    #endif
 
     // On an INT0 interrupt, the counter is reset to tcnt_init, so it
     // overflows after RESET_SAMPLE ticks. OCR0A and OCR0B are set so

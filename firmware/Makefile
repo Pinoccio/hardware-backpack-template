@@ -12,6 +12,9 @@ endif
 # Don't use jump tables, they make the code bigger
 CFLAGS+=-fno-jump-tables
 
+# Uncomment to enable output pins for debugging
+#CFLAGS+=-DDEBUG
+
 -include Makefile.local
 
 all: upload
