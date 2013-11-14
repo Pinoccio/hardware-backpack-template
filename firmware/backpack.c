@@ -709,6 +709,11 @@ void setup(void)
     // Enable pullups on all ports except the bus pin (to save power)
     PORTB = ~(1 << PINB1);
 
+    // Shut off power to the ADC
+    #if defined(PRR)
+    PRR = (1 << PRADC);
+    #endif
+
     // Set ports to output for debug
     DDRB = (1 << PINB0) | (1 << PINB2) | (1 << PINB4);
 
