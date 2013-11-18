@@ -2,8 +2,10 @@
 #define _PROTOCOL_H
 // Broadcast commands (i.e., special addresses sent over the wire)
 enum {
+    ADDRESS_RESERVED = 0x0,
     // Start bus enumeration
     BC_CMD_ENUMERATE = 0xff,
+    BC_FIRST = BC_CMD_ENUMERATE,
 };
 
 // Targeted commands (i.e,. sent over the wire after the address)

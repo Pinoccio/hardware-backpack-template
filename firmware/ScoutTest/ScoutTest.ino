@@ -502,6 +502,14 @@ void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
     ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr], &expect_ok);
 }
 
+// Address an unknown slave
+void test_unassigned_address(uint8_t addr) {
+    status expect_no_reply = {NO_ACK_OR_NACK};
+    bool ok = test_reset();
+    ok = ok && test_address(addr, &expect_no_reply);
+    ok = ok && test_empty_bus();
+}
+
 void loop() {
     uint8_t count = sizeof(ids)/sizeof(*ids);
     delay(1000);
@@ -539,6 +547,8 @@ void loop() {
         test_write_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
         test_write_unchanged_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
     }
+    test_unassigned_address(ADDRESS_RESERVED);
+    test_unassigned_address(random(count + 1, BC_FIRST));
 
     // On every loop, introduce parity errors in different places
     parity_error_byte++;
