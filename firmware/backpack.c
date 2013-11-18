@@ -412,6 +412,13 @@ ISR(__vector_bit_start)
     // timer interrupts were disabled
     TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
 
+    // Clear the INT0 flag. If the line went high again already, our
+    // pulling it low would trigger the INT0 interrupt for a second
+    // time, so ignore it when that happens.  Ideally, we pull the line
+    // low before the master releases it, but the protocol doesn't
+    // strictly require this.
+    GIFR = (1 << INTF0);
+
     // If we were powered-down, we'll have been set to a
     // level-triggered interrupt instead of an edge-triggered one,
     // since a edge-triggered one can wake us up. We'll need to set
