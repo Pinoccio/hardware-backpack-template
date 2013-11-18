@@ -65,6 +65,13 @@ struct status {
 uint8_t ids[4][8];
 uint8_t eeproms[4][EEPROM_SIZE];
 
+// Where to introduce a parity error? This indicates the number of
+// bytes to be sent normally before a parity error is introduced
+uint8_t parity_error_byte = -1;
+
+// How many bytes without parity error are left in the current
+// transaction? Automatically reset to parity_error_byte by test_reset.
+uint8_t parity_error_left;
 
 bool bp_wait_for_free_bus(status *status) {
     uint8_t timeout = 255;
@@ -370,6 +377,7 @@ bool test_check_status(const status *s, const status *expected) {
 
 bool test_reset() {
     status s = {OK};
+    parity_error_left = parity_error_byte;
     if (!bp_reset(&s)) {
         test_print_failed("Reset failed", &s);
         return false;
@@ -386,41 +394,43 @@ bool test_read_byte(uint8_t *b, status *expected, bool progress = true) {
     return test_check_status(&s, expected);
 }
 
-bool test_write_byte(uint8_t b, status *expected, bool invert_parity = false, bool progress = true) {
+bool test_empty_bus();
+
+bool test_write_byte(uint8_t b, status *expected, bool progress = true) {
     status s = {OK};
     if (progress)
         test_progress("Writing byte: ", b);
-    bp_write_byte(b, &s, invert_parity);
-    return test_check_status(&s, expected);
+    if (parity_error_left-- == 0) {
+        status expect_parity = {NACK, ERR_PARITY};
+        bool ok = test_progress("Introduced parity error");
+        bp_write_byte(b, &s, true);
+        ok = ok && test_check_status(&s, &expect_parity);
+        ok = ok && test_empty_bus();
+        // Even if the parity error was handled as expected, don't
+        // continue with the rest of the testcase
+        return false;
+    } else {
+        bp_write_byte(b, &s);
+        return test_check_status(&s, expected);
+    }
 }
 
 bool test_address(uint8_t addr, status *expected) {
     test_progress("Sending address: ", addr);
-    return test_write_byte(addr, expected, false, false);
+    return test_write_byte(addr, expected, false);
 }
 
 bool test_cmd(uint8_t addr, uint8_t cmd, status *expected) {
     status expect_ok = {OK};
     bool ok = test_address(addr, &expect_ok);
     ok = ok && test_progress("Sending command: ", cmd);
-    return ok && test_write_byte(cmd, expected, false, false);
+    return ok && test_write_byte(cmd, expected, false);
 }
 
 bool test_empty_bus() {
     status expect_no_reply = {NO_ACK_OR_NACK};
     uint8_t b;
     return test_read_byte(&b, &expect_no_reply);
-}
-
-// Send a parity error
-void test_parity(uint8_t addr) {
-    status expect_ok = {OK, 0};
-    status expect_parity = {NACK, ERR_PARITY};
-    bool ok = test_reset();
-    ok = ok && test_address(addr, &expect_ok);
-    ok = ok && test_progress("Sending command (with parity error): ", CMD_READ_EEPROM);
-    ok = ok && test_write_byte(CMD_READ_EEPROM, &expect_parity, true);
-    ok = ok && test_empty_bus();
 }
 
 // Send an unknown command
@@ -513,10 +523,11 @@ void loop() {
 
     for (uint8_t i = 0; i < count; ++i) {
         Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
+        Serial.print("Parity error at byte:");
+        Serial.println(parity_error_byte);
         Serial.println("Only errors prefixed with ---> are unexpected");
         uint8_t addr = FIRST_VALID_ADDRESS + i;
 
-        test_parity(addr);
         test_unknown_command(addr);
         test_invalid_read_address(addr);
         test_read_overflow(addr);
@@ -524,6 +535,9 @@ void loop() {
         test_write_readonly(addr);
         test_write_unchanged_readonly(addr);
     }
+
+    // On every loop, introduce parity errors in different places
+    parity_error_byte++;
 }
 
 /* vim: set filetype=cpp sw=4 sts=4 expandtab: */
