@@ -45,11 +45,12 @@ read_fuses:
 
 # Write a random unique ID to eeprom. Variables can be override on the
 # commandline, e.g. make eeprom_id MODEL=0003
+eeprom_id: LAYOUT_VERSION:=00
 eeprom_id: PROTO_VERSION:=01
 eeprom_id: MODEL:=$(shell head --bytes=2 /dev/urandom |hexdump -v -e '/1 "%02X"')
 eeprom_id: SERIALNO:=$(shell head --bytes=3 /dev/urandom |hexdump -v -e '/1 "%02X"')
 eeprom_id: REVISION:=$(shell head --bytes=1 /dev/urandom |hexdump -v -e '/1 "%02X"')
-eeprom_id: ID:=$(PROTO_VERSION)$(MODEL)$(REVISION)$(SERIALNO)$(CHECKSUM)
+eeprom_id: ID:=$(LAYOUT_VERSION)$(PROTO_VERSION)$(MODEL)$(REVISION)$(SERIALNO)
 eeprom_id: CHECKSUM:=$(shell printf "%02x" $$(pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false --reflect-out=false --xor-out=0 --check-hexstring $(ID)))
 eeprom_id: DATA=$(shell echo $(ID)$(CHECKSUM) | tr '[:upper:]' '[:lower:]' | sed 's/../0x& /g')
 eeprom_id:
