@@ -22,11 +22,39 @@
 
 #define BP_BUS_PIN 2
 
-#define RESET_DELAY 2000
-#define START_DELAY 100
-#define VALUE_DELAY 550
-#define SAMPLE_DELAY 250
-#define IDLE_DELAY 50
+struct timings {
+    unsigned reset;
+    unsigned start;
+    unsigned value;
+    unsigned sample;
+    unsigned idle;
+};
+
+timings timings_to_test[] = {
+    // Minimum timings
+    {   .reset = 1800,
+        .start = 50,
+        .value = 550,
+        .sample = 250,
+        .idle = 50,
+    },
+    // Typical timings
+    {   .reset = 2000,
+        .start = 100,
+        .value = 550,
+        .sample = 250,
+        .idle = 50,
+    },
+    // Maximum timings
+    {   .reset = 2200,
+        .start = 200,
+        .value = 500,
+        .sample = 200,
+        .idle = 50,
+    }
+};
+
+timings *current_timings;
 
 // Should perhaps be read from EEPROM, but for now hardcoding is fine
 #define EEPROM_SIZE 64
@@ -96,9 +124,9 @@ bool bp_reset(status *status = NULL) {
         return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
-    delayMicroseconds(RESET_DELAY);
+    delayMicroseconds(current_timings->reset);
     pinMode(BP_BUS_PIN, INPUT);
-    delayMicroseconds(IDLE_DELAY);
+    delayMicroseconds(current_timings->idle);
     return true;
 }
 
@@ -107,12 +135,12 @@ bool bp_write_bit(uint8_t bit, status *status = NULL) {
         return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
-    delayMicroseconds(START_DELAY);
+    delayMicroseconds(current_timings->start);
     if (bit)
         pinMode(BP_BUS_PIN, INPUT);
-    delayMicroseconds(VALUE_DELAY);
+    delayMicroseconds(current_timings->value);
     pinMode(BP_BUS_PIN, INPUT);
-    delayMicroseconds(IDLE_DELAY);
+    delayMicroseconds(current_timings->idle);
     return true;
 }
 
@@ -121,17 +149,17 @@ bool bp_read_bit(uint8_t *value, status *status = NULL) {
         return false;
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
-    delayMicroseconds(START_DELAY);
+    delayMicroseconds(current_timings->start);
     pinMode(BP_BUS_PIN, INPUT);
-    delayMicroseconds(SAMPLE_DELAY);
+    delayMicroseconds(current_timings->sample);
     *value = digitalRead(BP_BUS_PIN);
-    delayMicroseconds(VALUE_DELAY - SAMPLE_DELAY);
+    delayMicroseconds(current_timings->value - current_timings->sample);
     // If a slave pulls the line low, wait for him to finish (to
     // prevent the idle time from disappearing because of a slow
     // slave), but don't wait forever.
     if (!bp_wait_for_free_bus(status))
         return false;
-    delayMicroseconds(IDLE_DELAY);
+    delayMicroseconds(current_timings->idle);
     return true;
 }
 
@@ -518,44 +546,51 @@ void test_unassigned_address(uint8_t addr) {
 }
 
 void loop() {
-    uint8_t count = lengthof(ids);
-    delay(1000);
-    Serial.println("Scanning...");
-    digitalWrite(3, HIGH);
-    digitalWrite(3, LOW);
-    if (!bp_scan(ids, &count)) {
-        Serial.println("---> Enumeration failed");
-        return;
-    }
-    print_scan_result(ids, count);
-    delay(100);
-    Serial.println("Reading EEPROM...");
-    for (uint8_t i = 0; i < count; ++i) {
-        if (!bp_read_eeprom(FIRST_VALID_ADDRESS + i, 0, eeproms[i], sizeof(*eeproms))) {
-            Serial.print("---> EEPROM read failed for device "); Serial.println(FIRST_VALID_ADDRESS + i);
-        } else {
-            print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
+    for (uint8_t t = 0; t < lengthof(timings_to_test); ++t) {
+        delay(1000);
+        uint8_t count = lengthof(ids);
+
+        current_timings = &timings_to_test[t];
+        Serial.print("Using timing set: ");
+        Serial.println(t);
+
+        Serial.println("Scanning...");
+        digitalWrite(3, HIGH);
+        digitalWrite(3, LOW);
+        if (!bp_scan(ids, &count)) {
+            Serial.println("---> Enumeration failed");
+            return;
         }
+        print_scan_result(ids, count);
         delay(100);
-    }
+        Serial.println("Reading EEPROM...");
+        for (uint8_t i = 0; i < count; ++i) {
+            if (!bp_read_eeprom(FIRST_VALID_ADDRESS + i, 0, eeproms[i], sizeof(*eeproms))) {
+                Serial.print("---> EEPROM read failed for device "); Serial.println(FIRST_VALID_ADDRESS + i);
+            } else {
+                print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
+            }
+            delay(100);
+        }
 
-    for (uint8_t i = 0; i < count; ++i) {
-        Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
-        Serial.print("Parity error at byte:");
-        Serial.println(parity_error_byte);
-        Serial.println("Only errors prefixed with ---> are unexpected");
-        uint8_t addr = FIRST_VALID_ADDRESS + i;
+        for (uint8_t i = 0; i < count; ++i) {
+            Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
+            Serial.print("Parity error at byte:");
+            Serial.println(parity_error_byte);
+            Serial.println("Only errors prefixed with ---> are unexpected");
+            uint8_t addr = FIRST_VALID_ADDRESS + i;
 
-        test_unknown_command(addr, CMD_RESERVED);
-        test_unknown_command(addr, random(CMD_LAST + 1, 256));
-        test_invalid_read_address(addr, random(EEPROM_SIZE, 256));
-        test_read_overflow(addr);
-        test_write_overflow(addr);
-        test_write_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
-        test_write_unchanged_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
+            test_unknown_command(addr, CMD_RESERVED);
+            test_unknown_command(addr, random(CMD_LAST + 1, 256));
+            test_invalid_read_address(addr, random(EEPROM_SIZE, 256));
+            test_read_overflow(addr);
+            test_write_overflow(addr);
+            test_write_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
+            test_write_unchanged_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
+        }
+        test_unassigned_address(ADDRESS_RESERVED);
+        test_unassigned_address(random(count + 1, BC_FIRST));
     }
-    test_unassigned_address(ADDRESS_RESERVED);
-    test_unassigned_address(random(count + 1, BC_FIRST));
 
     // On every loop, introduce parity errors in different places
     parity_error_byte++;
