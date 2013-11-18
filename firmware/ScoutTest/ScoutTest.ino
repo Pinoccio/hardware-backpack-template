@@ -30,6 +30,8 @@
 
 // Should perhaps be read from EEPROM, but for now hardcoding is fine
 #define EEPROM_SIZE 64
+// Ofset of the unique ID within the EEPROM
+#define UNIQUE_ID_OFFSET 1
 
 #include "../protocol.h"
 #include "crc.h"
@@ -437,20 +439,20 @@ bool test_empty_bus() {
 }
 
 // Send an unknown command
-void test_unknown_command(uint8_t addr) {
+void test_unknown_command(uint8_t addr, uint8_t cmd) {
     status expect_unknown = {NACK, ERR_UNKNOWN_COMMAND};
     bool ok = test_reset();
-    ok = ok && test_cmd(addr, CMD_RESERVED, &expect_unknown);
+    ok = ok && test_cmd(addr, cmd, &expect_unknown);
     ok = ok && test_empty_bus();
 }
 
 // Send an out-of-bound EEPROM address
-void test_invalid_read_address(uint8_t addr) {
+void test_invalid_read_address(uint8_t addr, uint8_t eeprom_addr) {
     status expect_ok = {OK, 0};
     status expect_invalid_read = {NACK, ERR_READ_EEPROM_INVALID_ADDRESS};
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_READ_EEPROM, &expect_ok);
-    ok = ok && test_write_byte(2 * EEPROM_SIZE, &expect_invalid_read);
+    ok = ok && test_write_byte(eeprom_addr, &expect_invalid_read);
     ok = ok && test_empty_bus();
 }
 
@@ -481,25 +483,23 @@ void test_write_overflow(uint8_t addr) {
 }
 
 // Write read-only byte
-void test_write_readonly(uint8_t addr) {
+void test_write_readonly(uint8_t addr, uint8_t eeprom_addr) {
     status expect_ok = {OK, 0};
         status expect_read_only = {NACK, ERR_WRITE_EEPROM_READ_ONLY};
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
-    ok = ok && test_write_byte(1, &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][1] + 1, &expect_read_only);
+    ok = ok && test_write_byte(eeprom_addr, &expect_ok);
+    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr] + 1, &expect_read_only);
     ok = ok && test_empty_bus();
 }
 
 // Write read-only bytes with unchanged value
-void test_write_unchanged_readonly(uint8_t addr) {
+void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
     status expect_ok = {OK, 0};
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
-    ok = ok && test_write_byte(1, &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][1], &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][2], &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][3], &expect_ok);
+    ok = ok && test_write_byte(eeprom_addr, &expect_ok);
+    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr], &expect_ok);
 }
 
 void loop() {
@@ -531,12 +531,13 @@ void loop() {
         Serial.println("Only errors prefixed with ---> are unexpected");
         uint8_t addr = FIRST_VALID_ADDRESS + i;
 
-        test_unknown_command(addr);
-        test_invalid_read_address(addr);
+        test_unknown_command(addr, CMD_RESERVED);
+        test_unknown_command(addr, random(CMD_LAST + 1, 256));
+        test_invalid_read_address(addr, random(EEPROM_SIZE, 256));
         test_read_overflow(addr);
         test_write_overflow(addr);
-        test_write_readonly(addr);
-        test_write_unchanged_readonly(addr);
+        test_write_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
+        test_write_unchanged_readonly(addr, UNIQUE_ID_OFFSET + random(0, UNIQUE_ID_LENGTH));
     }
 
     // On every loop, introduce parity errors in different places
