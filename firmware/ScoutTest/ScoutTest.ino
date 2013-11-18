@@ -33,6 +33,8 @@
 // Ofset of the unique ID within the EEPROM
 #define UNIQUE_ID_OFFSET 1
 
+#define lengthof(x) (sizeof(x)/sizeof(*x))
+
 #include "../protocol.h"
 #include "crc.h"
 
@@ -355,7 +357,7 @@ void test_print_failed(const char *msg, const status *s) {
     Serial.print("---> ");
     Serial.println(msg);
     Serial.print("---> Status was: ");
-    if (s->code < sizeof(error_code_str) / sizeof(*error_code_str))
+    if (s->code < lengthof(error_code_str))
         Serial.print(error_code_str[s->code]);
     else
         Serial.print(s->code);
@@ -516,7 +518,7 @@ void test_unassigned_address(uint8_t addr) {
 }
 
 void loop() {
-    uint8_t count = sizeof(ids)/sizeof(*ids);
+    uint8_t count = lengthof(ids);
     delay(1000);
     Serial.println("Scanning...");
     digitalWrite(3, HIGH);
