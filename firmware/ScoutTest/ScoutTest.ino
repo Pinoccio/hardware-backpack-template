@@ -393,19 +393,27 @@ bool test_progress(const char *msg, uint8_t b) {
     return true;
 }
 
-void test_print_failed(const char *msg, const status *s) {
-    Serial.print("---> ");
-    Serial.println(msg);
-    Serial.print("---> Status was: ");
+void test_println_status(const status *s) {
     if (s->code < lengthof(error_code_str))
         Serial.print(error_code_str[s->code]);
     else
         Serial.print(s->code);
     if (s->code == NACK) {
-        Serial.print(", slave sent error code: 0x");
+        Serial.print(", slave error code: 0x");
         Serial.print(s->slave_code);
     }
     Serial.println();
+}
+
+void test_print_failed(const char *msg, const status *s, const status *expected = NULL) {
+    Serial.print("---> ");
+    Serial.println(msg);
+    Serial.print("---> Status was: ");
+    test_println_status(s);
+    if (expected) {
+        Serial.print("---> Expected: ");
+        test_println_status(expected);
+    }
     while(Serial.read() != -1) /* Do nothing */;
     Serial.println("---> Press a key to continue testing");
     while(Serial.read() == -1) /* Do nothing */;
@@ -413,10 +421,10 @@ void test_print_failed(const char *msg, const status *s) {
 
 bool test_check_status(const status *s, const status *expected) {
     if (s->code != expected->code) {
-        test_print_failed("Unexpected status", s);
+        test_print_failed("Unexpected status", s, expected);
         return false;
     } else if (expected->code == NACK && s->slave_code != expected->slave_code) {
-        test_print_failed("Unexpected slave error code", s);
+        test_print_failed("Unexpected slave error code", s, expected);
         return false;
     }
     return true;
