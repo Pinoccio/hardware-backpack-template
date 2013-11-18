@@ -28,6 +28,7 @@ struct timings {
     unsigned value;
     unsigned sample;
     unsigned idle;
+    unsigned next_bit;
 };
 
 timings timings_to_test[] = {
@@ -37,6 +38,7 @@ timings timings_to_test[] = {
         .value = 550,
         .sample = 250,
         .idle = 50,
+        .next_bit = 700,
     },
     // Typical timings
     {   .reset = 2000,
@@ -44,6 +46,8 @@ timings timings_to_test[] = {
         .value = 550,
         .sample = 250,
         .idle = 50,
+        // Directly after the idle time
+        .next_bit = 0,
     },
     // Maximum timings
     {   .reset = 2200,
@@ -51,6 +55,7 @@ timings timings_to_test[] = {
         .value = 500,
         .sample = 200,
         .idle = 50,
+        .next_bit = 1100,
     }
 };
 
@@ -105,6 +110,9 @@ uint8_t parity_error_byte = -1;
 // transaction? Automatically reset to parity_error_byte by test_reset.
 uint8_t parity_error_left;
 
+// When was the start of the most recent bit?
+unsigned long bit_start = 0;
+
 bool bp_wait_for_free_bus(status *status) {
     uint8_t timeout = 255;
     while(timeout--) {
@@ -131,8 +139,10 @@ bool bp_reset(status *status = NULL) {
 }
 
 bool bp_write_bit(uint8_t bit, status *status = NULL) {
+    while(micros() - bit_start < current_timings->next_bit) /* wait */;
     if (!bp_wait_for_free_bus(status))
         return false;
+    bit_start = micros();
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(current_timings->start);
@@ -145,8 +155,10 @@ bool bp_write_bit(uint8_t bit, status *status = NULL) {
 }
 
 bool bp_read_bit(uint8_t *value, status *status = NULL) {
+    while(micros() - bit_start < current_timings->next_bit) /* wait */;
     if (!bp_wait_for_free_bus(status))
         return false;
+    bit_start = micros();
     pinMode(BP_BUS_PIN, OUTPUT);
     digitalWrite(BP_BUS_PIN, LOW);
     delayMicroseconds(current_timings->start);
