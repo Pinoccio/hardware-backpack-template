@@ -353,7 +353,10 @@ void test_print_failed(const char *msg, const status *s) {
     Serial.print("---> ");
     Serial.println(msg);
     Serial.print("---> Status was: ");
-    Serial.print(error_code_str[s->code]);
+    if (s->code < sizeof(error_code_str) / sizeof(*error_code_str))
+        Serial.print(error_code_str[s->code]);
+    else
+        Serial.print(s->code);
     if (s->code == NACK) {
         Serial.print(", slave sent error code: 0x");
         Serial.print(s->slave_code);
