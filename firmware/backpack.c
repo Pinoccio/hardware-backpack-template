@@ -388,10 +388,6 @@ ISR(__vector_bit_start)
     // effectively ignored. This can only happen when a device violates the
     // protocol.
 
-    // Clear any interrupt flags that might have been set while the
-    // timer interrupts were disabled
-    TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
-
     // Start with a clean slate, in case there is a falling edge before
     // compare A or B interrupts. During normal operation, this should
     // never happen, but if we don't do this we could deadlock (pulling
@@ -401,6 +397,20 @@ ISR(__vector_bit_start)
     // bus, the INT0 interrupt could trigger with the bus low somehow).
     TIMSK0 = (1 << TOIE0);
     DDRB &= ~(1 << PINB1);
+
+    // Don't bother doing either of these when we're muted
+    if ((flags & FLAG_MUTE) && (action & AF_MUTE))
+        action &= ~(AF_LINE_LOW | AF_SAMPLE);
+
+    if ((action & AF_LINE_LOW)) {
+        // Pull the line low and enable a timer to release it again
+        DDRB |= (1 << PINB1);
+        TIMSK0 |=  (1 << OCIE0B);
+    }
+
+    // Clear any interrupt flags that might have been set while the
+    // timer interrupts were disabled
+    TIFR0 = (1 << OCF0B) | (1 << OCF0A) | (1 << TOV0);
 
     // If we were powered-down, we'll have been set to a
     // level-triggered interrupt instead of an edge-triggered one,
@@ -419,16 +429,6 @@ ISR(__vector_bit_start)
     // line will have been high, but the mainloop never sees that. We'll
     // help them a bit by setting the flag here.
     wdt_flags |= WDT_LINE_HIGH;
-
-    // Don't bother doing either of these when we're muted
-    if ((flags & FLAG_MUTE) && (action & AF_MUTE))
-        action &= ~(AF_LINE_LOW | AF_SAMPLE);
-
-    if ((action & AF_LINE_LOW)) {
-        // Pull the line low and enable a timer to release it again
-        DDRB |= (1 << PINB1);
-        TIMSK0 |=  (1 << OCIE0B);
-    }
 
     if (action & AF_SAMPLE) {
         // Schedule a timer to sample the line
