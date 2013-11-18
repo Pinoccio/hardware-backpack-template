@@ -359,6 +359,8 @@ void setup() {
     pinMode(3, OUTPUT);
     pinMode(4, OUTPUT);
     digitalWrite(3, LOW);
+
+    randomSeed(analogRead(0));
 }
 
 uint8_t eeprom_written = false;
@@ -582,6 +584,10 @@ void loop() {
         current_timings = &timings_to_test[t];
         Serial.print("Using timing set: ");
         Serial.println(t);
+        long seed = random();
+        randomSeed(seed);
+        Serial.print("Using random seed: ");
+        Serial.println(seed);
 
         Serial.println("Scanning...");
         digitalWrite(3, HIGH);
