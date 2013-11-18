@@ -59,6 +59,9 @@ timings timings_to_test[] = {
     }
 };
 
+// The maximum time after which the slave should go back to idle
+#define NEXT_BIT_TIMEOUT 1700
+
 timings *current_timings;
 
 // Should perhaps be read from EEPROM, but for now hardcoding is fine
@@ -493,6 +496,11 @@ bool test_empty_bus() {
     return test_read_byte(&b, &expect_no_reply);
 }
 
+bool test_timeout() {
+    while(micros() - bit_start < NEXT_BIT_TIMEOUT) /* wait */;
+    return test_empty_bus();
+}
+
 // Send an unknown command
 void test_unknown_command(uint8_t addr, uint8_t cmd) {
     status expect_unknown = {NACK, ERR_UNKNOWN_COMMAND};
@@ -555,6 +563,7 @@ void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
     ok = ok && test_write_byte(eeprom_addr, &expect_ok);
     ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr], &expect_ok);
+    ok = ok && test_timeout();
 }
 
 // Address an unknown slave
