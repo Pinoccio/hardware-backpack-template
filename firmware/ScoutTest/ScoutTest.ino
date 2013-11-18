@@ -393,9 +393,14 @@ bool test_reset() {
 
 bool test_read_byte(uint8_t *b, status *expected, bool progress = true) {
     status s = {OK};
-    bp_read_byte(b, &s);
-    if (progress)
-        test_progress("Reading byte: ", *b);
+    bool ok = bp_read_byte(b, &s);
+    if (progress) {
+        if (ok)
+            test_progress("Read byte: ", *b);
+        else
+            test_progress("Failed to read byte");
+    }
+
     return test_check_status(&s, expected);
 }
 
