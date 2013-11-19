@@ -25,7 +25,7 @@
 // To flash:
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U flash:w:backpack.hex
 //
-// Fuse settings are 0xff and 0x21:
+// Fuse settings are 0xfb and 0x21:
 //   avrdude -c stk500 -p attiny13 -P /dev/ttyUSB0 -U hfuse:w:0xfb:m -U lfuse:w:0x21:m
 //
 // Note that avr-libc 1.8.0 does not provide "tiny-stack" versions of
