@@ -405,7 +405,7 @@ void test_println_status(const status *s) {
         Serial.print(s->code);
     if (s->code == NACK) {
         Serial.print(", slave error code: 0x");
-        Serial.print(s->slave_code);
+        Serial.print(s->slave_code, HEX);
     }
     Serial.println();
 }
