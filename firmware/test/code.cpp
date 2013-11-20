@@ -229,25 +229,19 @@ bool bp_read_ack_nack(status *status = NULL) {
     // a bus conflict, a reading of 00 means both an ack and a nack was
     // sent.
     if (first == LOW && second == LOW) {
-        Serial.println("Both ACK and NAK received");
         if (status)
             status->code = ACK_AND_NACK;
         ok = false;
     } else if (second == LOW) {
-        Serial.println("NAK received");
         if (status) {
             // Read error code from the slave
-            if (bp_read_byte(&status->slave_code)) {
+            if (bp_read_byte(&status->slave_code))
                 status->code = NACK;
-                Serial.print("Slave error code: "); Serial.println(status->slave_code);
-            } else {
-                Serial.println("---> Failed to receive error code after NAK");
+            else
                 status->code = NACK_NO_SLAVE_CODE;
-            }
         }
         ok = false;
     } else if (first != LOW) {
-        Serial.println("No ACK received");
         if (status)
             status->code = NO_ACK_OR_NACK;
         ok = false;
@@ -274,7 +268,6 @@ bool bp_read_byte(uint8_t *b, status *status) {
     ok = ok && bp_read_bit(&value, status);
 
     if (ok && value == parity_val) {
-        Serial.println("Parity error");
         if (status)
             status->code = PARITY_ERROR;
         return false;
@@ -409,19 +402,8 @@ void print_eeprom(uint8_t addr, uint8_t *buf, uint8_t len) {
     Serial.println();
 }
 
-bool test_progress(const char *msg) {
-    Serial.println(msg);
-    return true;
-}
-
-bool test_progress(const char *msg, uint8_t b) {
+void test_println_status(const char *msg, const status *s) {
     Serial.print(msg);
-    Serial.print("0x");
-    Serial.println(b, HEX);
-    return true;
-}
-
-void test_println_status(const status *s) {
     if (s->code < lengthof(error_code_str))
         Serial.print(error_code_str[s->code]);
     else
@@ -433,15 +415,39 @@ void test_println_status(const status *s) {
     Serial.println();
 }
 
+void test_progress(const char *msg, const uint8_t *b, const status *s) {
+    Serial.print('\t');
+    Serial.print(msg);
+    if (b) {
+        Serial.print("0x");
+        Serial.print(*b, HEX);
+    }
+    if (s)
+        test_println_status(" - Status: ", s);
+    else
+        Serial.println();
+}
+
+void test_progress(const char *msg, const status *s = NULL) {
+    test_progress(msg, NULL, s);
+}
+
+void test_progress(const char *msg, uint8_t b, const status *s = NULL) {
+    test_progress(msg, &b, s);
+}
+
+void test_start(const char *msg) {
+    Serial.println();
+    Serial.println(msg);
+}
+
 void test_print_failed(const char *msg, const status *s, const status *expected = NULL) {
     Serial.print("---> ");
     Serial.println(msg);
-    Serial.print("---> Status was: ");
-    test_println_status(s);
-    if (expected) {
-        Serial.print("---> Expected: ");
-        test_println_status(expected);
-    }
+    test_println_status("---> Status was: ", s);
+    if (expected)
+        test_println_status("---> Expected: ", expected);
+
     while(Serial.read() != -1) /* Do nothing */;
     Serial.println("---> Press a key to continue testing");
     while(Serial.read() == -1) /* Do nothing */;
@@ -465,54 +471,50 @@ bool test_reset() {
         test_print_failed("Reset failed", &s);
         return false;
     }
-    test_progress("Reset");
+    test_progress("Reset", &s);
     return true;
 }
 
-bool test_read_byte(uint8_t *b, status *expected, bool progress = true) {
+bool test_read_byte(uint8_t *b, status *expected) {
     status s = {OK};
     bool ok = bp_read_byte(b, &s);
-    if (progress) {
-        if (ok)
-            test_progress("Read byte: ", *b);
-        else
-            test_progress("Failed to read byte");
-    }
+    if (ok)
+        test_progress("Read byte: ", *b, &s);
+    else
+        test_progress("Failed to read byte", &s);
 
     return test_check_status(&s, expected);
 }
 
 bool test_empty_bus();
 
-bool test_write_byte(uint8_t b, status *expected, bool progress = true) {
+bool test_write_byte(uint8_t b, status *expected, const char *msg = NULL) {
     status s = {OK};
-    if (progress)
-        test_progress("Writing byte: ", b);
     if (parity_error_left-- == 0 && expected->code != NO_ACK_OR_NACK) {
         status expect_parity = {NACK, ERR_PARITY};
-        bool ok = test_progress("Introduced parity error");
         bp_write_byte(b, &s, true);
-        ok = ok && test_check_status(&s, &expect_parity);
+        test_progress("Introducing parity error in next byte");
+        test_progress(msg ? : "Written byte: ", b, &s);
+        bool ok = test_check_status(&s, &expect_parity);
         ok = ok && test_empty_bus();
         // Even if the parity error was handled as expected, don't
         // continue with the rest of the testcase
         return false;
     } else {
         bp_write_byte(b, &s);
+        test_progress(msg ? : "Written byte: ", b, &s);
         return test_check_status(&s, expected);
     }
 }
 
 bool test_address(uint8_t addr, status *expected) {
-    test_progress("Sending address: ", addr);
-    return test_write_byte(addr, expected, false);
+    return test_write_byte(addr, expected, "Sending address: ");
 }
 
 bool test_cmd(uint8_t addr, uint8_t cmd, status *expected) {
     status expect_ok = {OK};
     bool ok = test_address(addr, &expect_ok);
-    ok = ok && test_progress("Sending command: ", cmd);
-    return ok && test_write_byte(cmd, expected, false);
+    return ok && test_write_byte(cmd, expected, "Sending command: ");
 }
 
 bool test_empty_bus() {
@@ -526,16 +528,16 @@ bool test_timeout() {
     return test_empty_bus();
 }
 
-// Send an unknown command
 void test_unknown_command(uint8_t addr, uint8_t cmd) {
+    test_start("Send an unknown command");
     status expect_unknown = {NACK, ERR_UNKNOWN_COMMAND};
     bool ok = test_reset();
     ok = ok && test_cmd(addr, cmd, &expect_unknown);
     ok = ok && test_empty_bus();
 }
 
-// Send an out-of-bound EEPROM address
 void test_invalid_read_address(uint8_t addr, uint8_t eeprom_addr) {
+    test_start("Send an out-of-bound EEPROM address");
     status expect_ok = {OK, 0};
     status expect_invalid_read = {NACK, ERR_READ_EEPROM_INVALID_ADDRESS};
     bool ok = test_reset();
@@ -544,8 +546,8 @@ void test_invalid_read_address(uint8_t addr, uint8_t eeprom_addr) {
     ok = ok && test_empty_bus();
 }
 
-// Read overflow into an invalid address
 void test_read_overflow(uint8_t addr) {
+    test_start("Read overflow into an invalid address");
     status expect_ok = {OK, 0};
     status expect_invalid_read = {NACK, ERR_READ_EEPROM_INVALID_ADDRESS};
     uint8_t b;
@@ -558,8 +560,8 @@ void test_read_overflow(uint8_t addr) {
 }
 
 
-// Write overflow into an invalid address
 void test_write_overflow(uint8_t addr) {
+    test_start("Write overflow into an invalid address");
     status expect_ok = {OK, 0};
     status expect_invalid_write = {NACK, ERR_WRITE_EEPROM_INVALID_ADDRESS};
     bool ok = test_reset();
@@ -570,8 +572,8 @@ void test_write_overflow(uint8_t addr) {
     ok = ok && test_empty_bus();
 }
 
-// Write read-only byte
 void test_write_readonly(uint8_t addr, uint8_t eeprom_addr) {
+    test_start("Write read-only byte");
     status expect_ok = {OK, 0};
         status expect_read_only = {NACK, ERR_WRITE_EEPROM_READ_ONLY};
     bool ok = test_reset();
@@ -581,8 +583,8 @@ void test_write_readonly(uint8_t addr, uint8_t eeprom_addr) {
     ok = ok && test_empty_bus();
 }
 
-// Write read-only bytes with unchanged value
 void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
+    test_start("Write read-only bytes with unchanged value");
     status expect_ok = {OK, 0};
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
@@ -591,8 +593,8 @@ void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
     ok = ok && test_timeout();
 }
 
-// Address an unknown slave
 void test_unassigned_address(uint8_t addr) {
+    test_start("Address an unknown slave");
     status expect_no_reply = {NO_ACK_OR_NACK};
     bool ok = test_reset();
     ok = ok && test_address(addr, &expect_no_reply);
@@ -625,6 +627,8 @@ void print_timings(const timings *t) {
 
 void loop() {
     for (uint8_t t = 0; t < lengthof(timings_to_test); ++t) {
+        Serial.println();
+        Serial.println();
         delay(1000);
         uint8_t count = lengthof(ids);
 
@@ -641,6 +645,9 @@ void loop() {
         randomSeed(seed);
         Serial.print("Using random seed: ");
         Serial.println(seed);
+
+        Serial.print("Parity error at byte: ");
+        Serial.println(parity_error_byte);
 
         Serial.println("Scanning...");
         digitalWrite(3, HIGH);
@@ -662,10 +669,8 @@ void loop() {
         }
 
         for (uint8_t i = 0; i < count; ++i) {
-            Serial.print("Testing error conditions on device "); Serial.println(FIRST_VALID_ADDRESS + i);
-            Serial.print("Parity error at byte:");
-            Serial.println(parity_error_byte);
-            Serial.println("Only errors prefixed with ---> are unexpected");
+            Serial.println();
+            Serial.print("=== Testing device "); Serial.println(FIRST_VALID_ADDRESS + i);
             uint8_t addr = FIRST_VALID_ADDRESS + i;
 
             test_unknown_command(addr, CMD_RESERVED);
