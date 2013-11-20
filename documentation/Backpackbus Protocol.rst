@@ -416,40 +416,40 @@ single-byte address of the slave it wants to talk to. The slave whose
 address was sent keeps paying attention, all other slaves drop off the
 bus until the next reset signal.
 
-If the master sends the special address 255 (0xff) all slaves will forget
+If the master sends the special address 254 (0xfe) all slaves will forget
 their current address (if any) and switch into bus enumeration mode to
 get a new address.
 
-Valid slave addresses are 1 to 127 (0x7f). Addresses 128 (0x80) to
-255 (0xff) are reserved for broadcast commands and potentially other
+Valid slave addresses are 0 to 127 (0x7f). Addresses 128 (0x80) to
+254 (0xfe) are reserved for broadcast commands and potentially other
 future uses.
 
 Slaves can assume that the master will never enumerate more than 128
 devices, so they do not need to check if their address would become
 invalid.
 
-When a slave receives an unknown broadcast command, it should drop off
+When a slave receives an unknown command, it should drop off
 the bus and not send any handshaking bits.
 
 .. admonition:: Rationale: Number of slaves
 
         This approach allows 128 slaves to be connected to the bus, which should
         be plenty. Also, it allows checking bit 7 to distinguish between address
-        and broadcast command, which might be useful at some point. Having 128
+        and broadcast command, which might be useful at some point. Having 127
         possible broadcast commands available is probably more then ever needed,
         though.
 
-        Address 0 is reserved so there is at least one value that is
+        Address 255 is reserved so there is at least one value that is
         never a valid address, which might be useful for
         implementations.
 
 =============  =====================
 Adress         Meaning
 =============  =====================
-0              Reserved
-1 - 127        Slave addresses
-128 - 254      Reserved
-255            Start enumeration
+0 - 127        Slave addresses
+128 - 253      Reserved
+254            Start enumeration
+255            Reserved
 =============  =====================
 
 =================
@@ -603,8 +603,8 @@ its address without conflicts. This slave assigns itself the next
 address, drops off the bus and is now considered enumerated.
 
 The addresses are assigned in order: The slave that completes the first
-round gets address 1, the slave that completes the second round gets
-address 2, etc.
+round gets address 0, the slave that completes the second round gets
+address 1, etc.
 
 The master will continue reading unique ids from the bus, until it reads
 a first byte of 0xff for which it receives neither an ack nor a nack.

@@ -309,15 +309,15 @@ bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
         *count = 0;
         return true;
     }
-    uint8_t next_addr = FIRST_VALID_ADDRESS;
+    uint8_t next_addr = 0;
     uint8_t crc = 0;
     while (ok) {
-        uint8_t *id = result[next_addr - FIRST_VALID_ADDRESS];
+        uint8_t *id = result[next_addr];
         for (uint8_t i = 0; i < UNIQUE_ID_LENGTH && ok; ++i) {
             ok = bp_read_byte(&id[i], &status);
             // Nobody responded, meaning all device are enumerated
             if (i == 0 && status.code == NO_ACK_OR_NACK) {
-                *count = next_addr - FIRST_VALID_ADDRESS;
+                *count = next_addr;
                 return true;
             }
             crc = crc_update(UNIQUE_ID_CRC_POLY, crc, id[i]);
@@ -336,7 +336,7 @@ bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
             return false;
         }
 
-        if (next_addr++ == FIRST_VALID_ADDRESS + *count)
+        if (next_addr++ == *count)
             break;
     }
     return ok;
@@ -383,7 +383,7 @@ uint8_t eeprom_written = false;
 
 void print_scan_result(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t count) {
     for (uint8_t i = 0; i < count; ++ i) {
-        Serial.print("Device "); Serial.print(FIRST_VALID_ADDRESS + i, HEX); Serial.print(" found with id: ");
+        Serial.print("Device "); Serial.print(i, HEX); Serial.print(" found with id: ");
         for (uint8_t j = 0; j < UNIQUE_ID_LENGTH; ++j) {
             if (result[i][j] < 0x10) Serial.print("0");
                 Serial.print(result[i][j], HEX);
@@ -540,7 +540,7 @@ void test_write_eeprom(uint8_t addr, uint8_t eeprom_addr, uint8_t len) {
         uint8_t b = random(0, 256);
         ok = ok && test_write_byte(b, &expect_ok);
         if (ok)
-            eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr + i] = b;
+            eeproms[addr][eeprom_addr + i] = b;
     }
 }
 
@@ -554,7 +554,7 @@ void test_read_eeprom(uint8_t addr, uint8_t eeprom_addr, uint8_t len) {
     for (uint8_t i = 0; i < len && ok; ++i) {
         uint8_t b;
         ok = ok && test_read_byte(&b, &expect_ok);
-        if (ok && b != eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr + i]) {
+        if (ok && b != eeproms[addr][eeprom_addr + i]) {
             test_print_failed("EEPROM contents did not match");
             ok = false;
         }
@@ -600,7 +600,7 @@ void test_write_overflow(uint8_t addr) {
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
     ok = ok && test_write_byte(EEPROM_SIZE - 1, &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][EEPROM_SIZE - 1], &expect_ok);
+    ok = ok && test_write_byte(eeproms[addr][EEPROM_SIZE - 1], &expect_ok);
     ok = ok && test_write_byte(0, &expect_invalid_write);
     ok = ok && test_empty_bus();
 }
@@ -612,7 +612,7 @@ void test_write_readonly(uint8_t addr, uint8_t eeprom_addr) {
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
     ok = ok && test_write_byte(eeprom_addr, &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr] + 1, &expect_read_only);
+    ok = ok && test_write_byte(eeproms[addr][eeprom_addr] + 1, &expect_read_only);
     ok = ok && test_empty_bus();
 }
 
@@ -622,7 +622,7 @@ void test_write_unchanged_readonly(uint8_t addr, uint8_t eeprom_addr) {
     bool ok = test_reset();
     ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
     ok = ok && test_write_byte(eeprom_addr, &expect_ok);
-    ok = ok && test_write_byte(eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr], &expect_ok);
+    ok = ok && test_write_byte(eeproms[addr][eeprom_addr], &expect_ok);
     ok = ok && test_timeout();
 }
 
@@ -693,18 +693,18 @@ void loop() {
         delay(100);
         Serial.println("Reading EEPROM...");
         for (uint8_t i = 0; i < count; ++i) {
-            if (!bp_read_eeprom(FIRST_VALID_ADDRESS + i, 0, eeproms[i], sizeof(*eeproms))) {
-                Serial.print("---> EEPROM read failed for device "); Serial.println(FIRST_VALID_ADDRESS + i);
+            if (!bp_read_eeprom(i, 0, eeproms[i], sizeof(*eeproms))) {
+                Serial.print("---> EEPROM read failed for device "); Serial.println(i);
             } else {
-                print_eeprom(FIRST_VALID_ADDRESS + i, eeproms[i], sizeof(*eeproms));
+                print_eeprom(i, eeproms[i], sizeof(*eeproms));
             }
             delay(100);
         }
 
         for (uint8_t i = 0; i < count; ++i) {
             Serial.println();
-            Serial.print("=== Testing device "); Serial.println(FIRST_VALID_ADDRESS + i);
-            uint8_t addr = FIRST_VALID_ADDRESS + i;
+            Serial.print("=== Testing device "); Serial.println(i);
+            uint8_t addr = i;
 
             // Only write the eeprom once, to prevent wearing it out
             if (!eeprom_written) {

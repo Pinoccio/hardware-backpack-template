@@ -790,7 +790,7 @@ void loop(void)
                 flags |= FLAG_SEND;
                 flags &= ~FLAG_ENUMERATED;
                 next_byte = UNIQUE_ID_OFFSET;
-                bus_addr = FIRST_VALID_ADDRESS;
+                bus_addr = 0;
                 // Don't change out of STALL, let the next iteration
                 // prepare the first byte
             } else if ((flags & FLAG_ENUMERATED) && byte_buf == bus_addr) {
