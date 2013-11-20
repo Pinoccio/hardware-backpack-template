@@ -22,7 +22,11 @@
 
 #include <Arduino.h>
 
+#ifdef BACKPACK_BUS
+#define BP_BUS_PIN BACKPACK_BUS
+#else
 #define BP_BUS_PIN 2
+#endif
 
 struct timings {
     unsigned reset;
@@ -360,6 +364,11 @@ void setup() {
     Serial.begin(115200);
     pinMode(3, OUTPUT);
     digitalWrite(3, LOW);
+
+    #ifdef VCC_ENABLE
+    pinMode(VCC_ENABLE, OUTPUT);
+    digitalWrite(VCC_ENABLE, HIGH);
+    #endif
 
     randomSeed(analogRead(0));
 }
