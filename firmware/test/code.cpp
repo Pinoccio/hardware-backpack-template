@@ -441,10 +441,11 @@ void test_start(const char *msg) {
     Serial.println(msg);
 }
 
-void test_print_failed(const char *msg, const status *s, const status *expected = NULL) {
+void test_print_failed(const char *msg, const status *s = NULL, const status *expected = NULL) {
     Serial.print("---> ");
     Serial.println(msg);
-    test_println_status("---> Status was: ", s);
+    if (s)
+        test_println_status("---> Status was: ", s);
     if (expected)
         test_println_status("---> Expected: ", expected);
 
@@ -526,6 +527,38 @@ bool test_empty_bus() {
 bool test_timeout() {
     while(micros() - bit_start < NEXT_BIT_TIMEOUT) /* wait */;
     return test_empty_bus();
+}
+
+void test_write_eeprom(uint8_t addr, uint8_t eeprom_addr, uint8_t len) {
+    test_start("Write the EEPROM");
+    status expect_ok = {OK, 0};
+
+    bool ok = test_reset();
+    ok = ok && test_cmd(addr, CMD_WRITE_EEPROM, &expect_ok);
+    ok = ok && test_write_byte(eeprom_addr, &expect_ok);
+    for (uint8_t i = 0; i < len && ok; ++i) {
+        uint8_t b = random(0, 256);
+        ok = ok && test_write_byte(b, &expect_ok);
+        if (ok)
+            eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr + i] = b;
+    }
+}
+
+void test_read_eeprom(uint8_t addr, uint8_t eeprom_addr, uint8_t len) {
+    test_start("Read a piece of EEPROM");
+    status expect_ok = {OK, 0};
+
+    bool ok = test_reset();
+    ok = ok && test_cmd(addr, CMD_READ_EEPROM, &expect_ok);
+    ok = ok && test_write_byte(eeprom_addr, &expect_ok);
+    for (uint8_t i = 0; i < len && ok; ++i) {
+        uint8_t b;
+        ok = ok && test_read_byte(&b, &expect_ok);
+        if (ok && b != eeproms[addr - FIRST_VALID_ADDRESS][eeprom_addr + i]) {
+            test_print_failed("EEPROM contents did not match");
+            ok = false;
+        }
+    }
 }
 
 void test_unknown_command(uint8_t addr, uint8_t cmd) {
@@ -673,6 +706,17 @@ void loop() {
             Serial.print("=== Testing device "); Serial.println(FIRST_VALID_ADDRESS + i);
             uint8_t addr = FIRST_VALID_ADDRESS + i;
 
+            // Only write the eeprom once, to prevent wearing it out
+            if (!eeprom_written) {
+                // Fill everything past the unique id with random data
+                test_write_eeprom(addr, UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH, EEPROM_SIZE - UNIQUE_ID_OFFSET - UNIQUE_ID_LENGTH);
+                // And verify the write worked
+                test_read_eeprom(addr, 0, EEPROM_SIZE);
+                eeprom_written = true;
+            }
+
+            uint8_t start = random(0, EEPROM_SIZE);
+            test_read_eeprom(addr, start, random(1, EEPROM_SIZE - start));
             test_unknown_command(addr, CMD_RESERVED);
             test_unknown_command(addr, random(CMD_LAST + 1, 256));
             test_invalid_read_address(addr, random(EEPROM_SIZE, 256));
