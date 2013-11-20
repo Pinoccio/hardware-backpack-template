@@ -465,7 +465,7 @@ bool test_write_byte(uint8_t b, status *expected, bool progress = true) {
     status s = {OK};
     if (progress)
         test_progress("Writing byte: ", b);
-    if (parity_error_left-- == 0) {
+    if (parity_error_left-- == 0 && expected->code != NO_ACK_OR_NACK) {
         status expect_parity = {NACK, ERR_PARITY};
         bool ok = test_progress("Introduced parity error");
         bp_write_byte(b, &s, true);
