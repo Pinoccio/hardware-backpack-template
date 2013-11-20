@@ -37,9 +37,17 @@ struct timings {
     unsigned next_bit;
 };
 
+enum {
+    TIMING_MIN,
+    TIMING_TYP,
+    TIMING_MAX,
+    TIMING_RND,
+};
+
 timings timings_to_test[] = {
     // Minimum timings
-    {   .reset = 1800,
+    [TIMING_MIN] = {
+        .reset = 1800,
         .start = 50,
         .value = 550,
         .sample = 250,
@@ -47,7 +55,8 @@ timings timings_to_test[] = {
         .next_bit = 700,
     },
     // Typical timings
-    {   .reset = 2000,
+    [TIMING_TYP] = {
+        .reset = 2000,
         .start = 100,
         .value = 550,
         .sample = 250,
@@ -56,13 +65,17 @@ timings timings_to_test[] = {
         .next_bit = 0,
     },
     // Maximum timings
-    {   .reset = 2200,
+    [TIMING_MAX] = {
+        .reset = 2200,
         .start = 200,
         .value = 500,
         .sample = 200,
         .idle = 50,
         .next_bit = 1100,
-    }
+    },
+    // Random timings (filled in the loop)
+    [TIMING_RND] = {
+    },
 };
 
 // The maximum time after which the slave should go back to idle
@@ -586,14 +599,44 @@ void test_unassigned_address(uint8_t addr) {
     ok = ok && test_empty_bus();
 }
 
+void select_random_timings(timings *result, const timings *min, const timings *max) {
+    result->reset = random(min->reset, max->reset);
+    result->start = random(min->start, max->start);
+    result->value = random(min->value, max->value);
+    result->sample = random(min->sample, max->sample);
+    result->idle = random(min->idle, max->idle);
+    result->next_bit = random(min->next_bit, max->next_bit);
+}
+
+void print_timings(const timings *t) {
+    Serial.print("\treset: ");
+    Serial.println(t->reset);
+    Serial.print("\tstart: ");
+    Serial.println(t->start);
+    Serial.print("\tvalue: ");
+    Serial.println(t->value);
+    Serial.print("\tsample: ");
+    Serial.println(t->sample);
+    Serial.print("\tidle: ");
+    Serial.println(t->idle);
+    Serial.print("\tnext_bit: ");
+    Serial.println(t->next_bit);
+}
+
 void loop() {
     for (uint8_t t = 0; t < lengthof(timings_to_test); ++t) {
         delay(1000);
         uint8_t count = lengthof(ids);
 
         current_timings = &timings_to_test[t];
+
+        if (t == TIMING_RND)
+            select_random_timings(current_timings, &timings_to_test[TIMING_MIN], &timings_to_test[TIMING_MAX]);
+
         Serial.print("Using timing set: ");
         Serial.println(t);
+        print_timings(current_timings);
+
         long seed = random();
         randomSeed(seed);
         Serial.print("Using random seed: ");
