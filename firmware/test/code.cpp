@@ -724,7 +724,6 @@ void loop() {
                 test_write_eeprom(addr, UNIQUE_ID_OFFSET + UNIQUE_ID_LENGTH, EEPROM_SIZE - UNIQUE_ID_OFFSET - UNIQUE_ID_LENGTH);
                 // And verify the write worked
                 test_read_eeprom(addr, 0, EEPROM_SIZE);
-                eeprom_written = true;
             }
 
             uint8_t start = random(0, EEPROM_SIZE);
@@ -739,6 +738,7 @@ void loop() {
         }
         test_unassigned_address(ADDRESS_RESERVED);
         test_unassigned_address(random(count + 1, BC_FIRST));
+        eeprom_written = true;
     }
 
     // On every loop, introduce parity errors in different places
