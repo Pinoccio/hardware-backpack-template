@@ -140,8 +140,6 @@
     PORTB &= ~(1 << pin); \
     {uint8_t i; for (i=0;i<3;++i) _NOP();} \
     PORTB |= (1 << pin);
-#else
-#define pulse(pin)
 #endif
 
 // Offset of the unique ID within the EEPROM
