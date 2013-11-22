@@ -138,7 +138,7 @@
 #if defined(DEBUG)
 #define pulse(pin) do { \
     PORTB &= ~(1 << pin); \
-    {uint8_t i; for (i=0;i<3;++i) _NOP();} \
+    {uint8_t i; for (i=0;i<10;++i) _NOP();} \
     PORTB |= (1 << pin); \
     } while(0)
 #endif
