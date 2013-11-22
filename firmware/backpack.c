@@ -148,7 +148,7 @@ uint8_t const UNIQUE_ID_OFFSET = 2;
 
 // Protocol timings, in timer0 clock cycles (which runs at F_CPU / 8)
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
-#define RESET_SAMPLE US_TO_CLOCKS(1400)
+#define RESET_SAMPLE US_TO_CLOCKS(1800)
 #define DATA_WRITE US_TO_CLOCKS(600)
 #define DATA_SAMPLE US_TO_CLOCKS(300)
 
@@ -316,9 +316,9 @@ register uint8_t tcnt0_init asm("r17");
 // handshaking bits, 8 databits with a parity error, another 4
 // handshaking bits including a NAK, another 8 databits containing a
 // parity error code and 4 handshaking bits including an ack). With
-// worst-case bus and oscillator timings, this should take 24ms. So,
-// timing out after 32ms seems reasonable.
-static uint8_t const WDTCR_SETTINGS = (1 << WDP0);
+// maximum inter-bit timing (1500μs), this should take 42ms. So,
+// timing out after 64ms seems reasonable.
+static uint8_t const WDTCR_SETTINGS = (1 << WDP1);
 
 // Enable the watchdog.
 // Unlike the wdt_disable function in avr-libc, this does not disable

@@ -47,8 +47,8 @@ enum {
 timings timings_to_test[] = {
     // Minimum timings
     [TIMING_MIN] = {
-        .reset = 1800,
-        .start = 50,
+        .reset = 2200,
+        .start = 100,
         .value = 550,
         .sample = 250,
         .idle = 50,
@@ -56,22 +56,21 @@ timings timings_to_test[] = {
     },
     // Typical timings
     [TIMING_TYP] = {
-        .reset = 2000,
-        .start = 100,
+        .reset = 2500,
+        .start = 125,
         .value = 550,
         .sample = 250,
         .idle = 50,
-        // Directly after the idle time
-        .next_bit = 0,
+        .next_bit = 700,
     },
     // Maximum timings
     [TIMING_MAX] = {
-        .reset = 2200,
-        .start = 200,
+        .reset = 3000,
+        .start = 150,
         .value = 500,
         .sample = 200,
         .idle = 50,
-        .next_bit = 1100,
+        .next_bit = 1500,
     },
     // Random timings (filled in the loop)
     [TIMING_RND] = {
@@ -79,7 +78,7 @@ timings timings_to_test[] = {
 };
 
 // The maximum time after which the slave should go back to idle
-#define NEXT_BIT_TIMEOUT 1700
+#define NEXT_BIT_TIMEOUT 2200
 
 timings *current_timings;
 

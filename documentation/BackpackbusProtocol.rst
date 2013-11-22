@@ -180,17 +180,18 @@ The exact timings for the protocol are defined below.
 ===================  ========  ========  ========
 Duration             minimum   typical   maximum
 ===================  ========  ========  ========
-Master reset         1800μs    2000μs    2200μs
-Slave sample reset   1200μs    1450μs    1700μs
+Master reset         2200μs    2500μs    3000μs
+Slave sample reset   1500μs    1850μs    2200μs
 
-Master send 1        50μs      100μs     200μs
+Master send 1        100μs     125μs     150μs
 Master send 0        600μs     650μs     700μs
 Slave sample data    250μs     350μs     450μs
 
+Master receive       100μs     125μs     150μs
 Slave send 0         500μs     650μs     800μs
 Master sample data   300μs     350μs     400μs
 
-Next bit start       700μs               1100μs
+Next bit start       700μs               1500μs
 Bus idle time        50μs
 ===================  ========  ========  ========
 
@@ -210,19 +211,29 @@ guaranteed to lie within the minimum and maximum.
 
         When choosing the timings for the bus, the master is assumed to
         have an accurate crystal, with negligable deviations from the
-        nominal frequency. The master timings simply allow +/- 50μs, so
-        the exact software implementation does not need to jump through
-        hoops to get very exact timings. The reset duration has a bit
-        more allowance, simply because the actual duration doesn't
+        nominal frequency. The master timings simply allow +/- 50μs or
+        25μs, so the exact software implementation does not need to jump
+        through hoops to get very exact timings. The reset duration has
+        a bit more allowance, simply because the actual duration doesn't
         matter much.
 
         For the slave, the minimum and maximum are more relaxed, to
         allow slaves to use a less accurate RC oscillator for their
         clock.
 
-        Finally, care is taken to guarantee at least 50μs between every
-        bus change and sample moment, to allow for bus rise time (125kΩ
-        · 400pF is about 50μs).
+        Finally, care is taken to guarantee at least 100μs between every
+        bus change and sample moment, to allow for bus rise time (with
+        125kΩ and 400pF this allows the bus to rise up to 86% of VCC)
+
+        The next bit start time has been chosen such that it is at least
+        the typical send 0 time + bus idle time.
+
+        The maximum next bit start time allows the master to do some
+        work between bits and bytes. To allow the slave to sample for
+        reset and timeout at the same time, this means that the reset
+        time is longer than otherwise required, but since the reset only
+        happens once every transaction, this extra overhead is not so
+        significant.
 
         Detailed timing calculations that formed the basis of these
         calculations are available as `a separate spreadsheet`_.
