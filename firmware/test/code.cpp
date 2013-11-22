@@ -38,26 +38,26 @@ struct timings {
 };
 
 enum {
-    TIMING_MIN,
     TIMING_TYP,
+    TIMING_MIN,
     TIMING_MAX,
     TIMING_RND,
 };
 
 timings timings_to_test[] = {
-    // Minimum timings
-    [TIMING_MIN] = {
-        .reset = 2200,
-        .start = 100,
+    // Typical timings
+    [TIMING_TYP] = {
+        .reset = 2500,
+        .start = 125,
         .value = 550,
         .sample = 250,
         .idle = 50,
         .next_bit = 700,
     },
-    // Typical timings
-    [TIMING_TYP] = {
-        .reset = 2500,
-        .start = 125,
+    // Minimum timings
+    [TIMING_MIN] = {
+        .reset = 2200,
+        .start = 100,
         .value = 550,
         .sample = 250,
         .idle = 50,
