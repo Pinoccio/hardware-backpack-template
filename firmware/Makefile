@@ -4,6 +4,8 @@ GCC_MCU=attiny13a
 CRT_FILE=crttn13a.o
 AVRDUDE_PART=t13
 CFLAGS=-Wall -mmcu=$(GCC_MCU) -Os
+HFUSE=0xfb
+LFUSE=0x21
 
 ifeq ($(shell avr-gcc $(CFLAGS) --print-file-name $(CRT_FILE)),$(CRT_FILE))
 $(error "Gcc couldn't find $(CRT_FILE), you probably haven't applied the /usr/lib/avr/lib/avr25/tiny-stack workaround suggested in backpack.c? Short version: run ln -s /usr/lib/avr/lib/avr25 /usr/lib/avr/lib/avr25/tiny-stack")
@@ -42,6 +44,9 @@ read_eeprom:
 
 read_fuses:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U hfuse:r:-:h -U lfuse:r:-:h
+
+write_fuses:
+	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U hfuse:w:$(HFUSE):m -U lfuse:w:$(LFUSE):m
 
 # Write a random unique ID to eeprom. Variables can be override on the
 # commandline, e.g. make eeprom_id MODEL=0003
