@@ -136,10 +136,11 @@
 
 // Debug macro, generate a short pulse on the given pin (B0, B2 or B4)
 #if defined(DEBUG)
-#define pulse(pin) \
+#define pulse(pin) do { \
     PORTB &= ~(1 << pin); \
     {uint8_t i; for (i=0;i<3;++i) _NOP();} \
-    PORTB |= (1 << pin);
+    PORTB |= (1 << pin); \
+    } while(0)
 #endif
 
 // Offset of the unique ID within the EEPROM
