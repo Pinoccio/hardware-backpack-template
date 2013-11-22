@@ -299,12 +299,17 @@ bool bp_write_byte(uint8_t b, status *status = NULL, bool invert_parity = false)
     return ok && bp_read_ack_nack(status);
 }
 
-bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
+bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count, status *s = NULL) {
     bool ok = true;
-    status status = {OK, 0};
-    ok = ok && bp_reset(&status);
-    ok = ok && bp_write_byte(BC_CMD_ENUMERATE, &status);
-    if (status.code == NO_ACK_OR_NACK) {
+    // Make sure we can always read the status ourselves, even if our
+    // caller isn't interested
+    status s2 = {OK, 0};
+    if (!s)
+        s= &s2;
+
+    ok = ok && bp_reset(s);
+    ok = ok && bp_write_byte(BC_CMD_ENUMERATE, s);
+    if (s->code == NO_ACK_OR_NACK) {
         // Nobody on the bus
         *count = 0;
         return true;
@@ -314,10 +319,11 @@ bool bp_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
     while (ok) {
         uint8_t *id = result[next_addr];
         for (uint8_t i = 0; i < UNIQUE_ID_LENGTH && ok; ++i) {
-            ok = bp_read_byte(&id[i], &status);
+            ok = bp_read_byte(&id[i], s);
             // Nobody responded, meaning all device are enumerated
-            if (i == 0 && status.code == NO_ACK_OR_NACK) {
+            if (i == 0 && s->code == NO_ACK_OR_NACK) {
                 *count = next_addr;
+                s->code = OK;
                 return true;
             }
             crc = crc_update(UNIQUE_ID_CRC_POLY, crc, id[i]);
@@ -463,6 +469,13 @@ bool test_check_status(const status *s, const status *expected) {
         return false;
     }
     return true;
+}
+
+bool test_scan(uint8_t result[][UNIQUE_ID_LENGTH], uint8_t *count) {
+    status s = {OK};
+    status expect_ok = {OK};
+    bp_scan(result, count, &s);
+    return test_check_status(&s, &expect_ok);
 }
 
 bool test_reset() {
@@ -685,7 +698,7 @@ void loop() {
         Serial.println("Scanning...");
         digitalWrite(3, HIGH);
         digitalWrite(3, LOW);
-        if (!bp_scan(ids, &count)) {
+        if (!test_scan(ids, &count)) {
             Serial.println("---> Enumeration failed");
             return;
         }
