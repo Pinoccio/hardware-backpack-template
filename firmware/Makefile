@@ -50,7 +50,7 @@ write_fuses:
 
 # Write a random unique ID to eeprom. Variables can be override on the
 # commandline, e.g. make eeprom_id MODEL=0003
-eeprom_id: LAYOUT_VERSION:=00
+eeprom_id: LAYOUT_VERSION:=01
 eeprom_id: PROTO_VERSION:=01
 eeprom_id: EEPROM_SIZE:=40
 eeprom_id: MODEL:=$(shell head --bytes=2 /dev/urandom |hexdump -v -e '/1 "%02X"')
