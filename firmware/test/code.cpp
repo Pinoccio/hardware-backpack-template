@@ -120,7 +120,7 @@ struct status {
     uint8_t slave_code;
 };
 
-uint8_t ids[4][8];
+uint8_t ids[127][8];
 uint8_t eeproms[4][EEPROM_SIZE];
 
 // Where to introduce a parity error? This indicates the number of
