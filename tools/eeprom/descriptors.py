@@ -1,60 +1,83 @@
 # vim: set sw=4 sts=4 et fileencoding=utf-8
 
 from bitstring import Bits, BitArray, pack
+from voluptuous import Schema, Url, Range, All, Any, Optional, MultipleInvalid
+from voluptuous import Required, Extra, IsTrue
 import math
 
 from eeprom import minifloat
 
+NotEmpty = IsTrue
+
 class Descriptor:
+    @classmethod
+    def get_schema(cls):
+        # Pass extra = True here instead of using Extra as a key to
+        # work around https://github.com/alecthomas/voluptuous/issues/40
+        return Schema({
+            Required('type'): str
+        }, extra = True)
+
+    def __init__(self, d):
+        """
+        Create a descriptor.
+
+        d is a dict containing attributes, which should validate against
+        the schema returned by the get_schema class method on every
+        subclass.
+        """
+        self.d = d
+
     def effective_name(self):
         """
         Return the name for this descriptor.
-        Returns the default if no name was set.
+        Returns the default if no name was set and None if no default
+        was set either (e.g., this descriptor does not have a name).
         """
         try:
-            name = self.name
-        except AttributeError:
-            # This descriptor does not support a name
-            return None
-        if not name:
-            try:
-                return getattr(self.__class__, 'default_name')
-            except AttributeError:
-                raise ValueError("Name cannot be empty for {}".format(self.__class__.__name__))
-        return self.name
-
-    def append_minifloat(self, eeprom, data, format, unit, value):
-        if value is None:
-            e = s = 0
-        else:
-            (e, s, rounded) = format.encode(value)
-            if value != rounded:
-                eeprom.roundings.append("{0} {2} to {1} {2}".format(value, rounded, unit))
-        data.append(pack('uint:n', e, n = format.ebits))
-        data.append(pack('uint:n', e, n = format.sbits))
+            return self.d['name']
+        except KeyError:
+            return getattr(self.__class__, 'default_name', None)
 
 class SpiSlaveDescriptor(Descriptor):
     descriptor_type = 0x1
+    descriptor_name = 'spi-slave'
     default_name = "spi"
     speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
     speed_unit = 'Mhz'
 
-    def __init__(self, speed, ss_pin, name = ""):
-        self.name = name
-        self.speed = speed
-        self.ss_pin = ss_pin
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('ss_pin')     : pin,
+            Required('speed')      : int,
+            Optional('name')       : str,
+        })
 
-    def encode(self, eeprom, data):
-        data.append(pack('uint:8', self.descriptor_type))
-        data.append(pack('bool', bool(self.name)))
-        data.append(pack('pad:1')) # reserved
-        data.append(pack('uint:6', self.ss_pin))
-        self.append_minifloat(eeprom, data, self.speed_format, self.speed_unit, self.speed)
-        eeprom.append_string(data, self.name)
+    def encode(self, eeprom, res):
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append(pack('bool', 'name' in self.d))
+        res.append(pack('pad:1')) # reserved
+        res.append(pack('uint:6', self.d['ss_pin']))
+        res.append_minifloat(self.speed_format, self.speed_unit, self.d['speed'])
+        if ('name' in self.d):
+            res.append_string(self.d['name'])
 
 class UartDescriptor(Descriptor):
     descriptor_type = 0x2
+    descriptor_name = 'uart'
     default_name = "uart"
+
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('rx_pin')     : pin,
+            Required('tx_pin')     : pin,
+            Required('speed')      : Any(*[s for (s, v) in cls.speeds if version >= v]),
+            Optional('name')       : str,
+        })
 
     # List of UART speeds and minimal layout version required.
     # List index is the encoded value.
@@ -72,88 +95,101 @@ class UartDescriptor(Descriptor):
         (115200, 1),
     ]
 
-    def __init__(self, rx_pin, tx_pin, speed, name = ""):
-        self.name = name
-        self.rx_pin = rx_pin
-        self.tx_pin = tx_pin
-        self.speed = speed
-
-    def encoded_speed(self, eeprom):
-        for (i, (speed, version)) in enumerate(self.speeds):
-            if (self.speed == speed):
-                if (eeprom.layout_version >= version):
-                    return i
-                else:
-                    raise ValueError("UART speed of {} requires layout version {}".format(speed, version))
-
-        raise ValueError("Unsupported UART speed {}".format(self.speed))
-
-    def encode(self, eeprom, data):
-        data.append(pack('uint:8', self.descriptor_type))
-        data.append(pack('pad:2')) # reserved
-        data.append(pack('uint:6', self.tx_pin))
-        data.append(pack('pad:2')) # reserved
-        data.append(pack('uint:6', self.rx_pin))
-        data.append(pack('bool', bool(self.name)))
-        data.append(pack('pad:3')) # reserved
-        data.append(pack('uint:4', self.encoded_speed(eeprom)))
-        eeprom.append_string(data, self.name)
+    def encode(self, eeprom, res):
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['tx_pin']))
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['rx_pin']))
+        res.append(pack('bool', 'name' in self.d))
+        res.append(pack('pad:3')) # reserved
+        (speeds, _) = zip(*self.speeds)
+        res.append(pack('uint:4', speeds.index(self.d['speed'])))
+        if ('name' in self.d):
+            res.append_string(self.d['name'])
 
 class IOPinDescriptor(Descriptor):
     descriptor_type = 0x3
+    descriptor_name = 'io-pin'
 
-    def __init__(self, pin, name):
-        self.name = name
-        self.pin = pin
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('pin')        : pin,
+            Required('name')       : All(str, NotEmpty()),
+        })
 
-    def encode(self, eeprom, data):
-        data.append(pack('uint:8', self.descriptor_type))
-        data.append(pack('pad:2')) # reserved
-        data.append(pack('uint:6', self.pin))
-        eeprom.append_string(data, self.name)
+    def encode(self, eeprom, res):
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['pin']))
+        res.append_string(self.d['name'])
 
 class PowerUsageDescriptor(Descriptor):
     descriptor_type = 0x5
+    descriptor_name = 'power-usage'
     usage_format = minifloat.MinifloatFormat(4, 4, -4, math.ceil)
     usage_unit = 'μA'
 
-    def __init__(self, pin, minimum, typical, maximum):
-        self.pin = pin
-        self.minimum = minimum
-        self.typical = typical
-        self.maximum = maximum
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('pin')        : pin,
+            Required('minimum')    : int,
+            Required('typical')    : int,
+            Required('maximum')    : int,
+        })
 
-    def encode(self, eeprom, data):
-        data.append(pack('uint:8', self.descriptor_type))
-        data.append(pack('pad:2')) # reserved
-        data.append(pack('uint:6', self.pin))
-        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.minimum)
-        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.typical)
-        self.append_minifloat(eeprom, data, self.usage_format, self.usage_unit, self.maximum)
+    def encode(self, eeprom, res):
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['pin']))
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['minimum'])
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['typical'])
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['maximum'])
 
 class EmptyDescriptor(Descriptor):
     descriptor_type = 0xff
+    descriptor_name = 'empty'
 
-    def __init__(self, length):
-        self.length = length
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('length')     : int,
+        })
 
-    def encode(self, eeprom, data):
+    def encode(self, eeprom, res):
         # Just output the descriptor_type length times
-        for _ in range(self.length):
-            data.append(pack('uint:8', self.descriptor_type))
+        for _ in range(self.d['length']):
+            res.append(pack('uint:8', self.descriptor_type))
 
 class GroupDescriptor(Descriptor):
     descriptor_type = 0x4
 
-    def __init__(self, name, descriptors):
-        self.name = name
-        self.descriptors = descriptors
+    @classmethod
+    def get_schema(cls):
+        return Schema({
+            Required('name')        : All(str, NotEmpty()),
+            Required('descriptors') : [
+                Descriptor.get_schema(),
+            ]
+        })
 
-    def encode(self, eeprom, data):
-        eeprom.offsets[data.len // 8] = "Group " + self.name
-        data.append(pack('uint:8', self.descriptor_type))
-        eeprom.append_string(data, self.name)
+    def __init__(self, *args, **kwargs):
+        self.descriptors = []
+        super(GroupDescriptor, self).__init__(*args, **kwargs)
+
+    def encode(self, eeprom, res):
+        res.offsets[res.data.len // 8] = self.__class__.__name__ + " " + self.d['name']
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append_string(self.d['name'])
 
         for d in self.descriptors:
-            eeprom.offsets[data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")
-            d.encode(eeprom, data)
+            res.offsets[res.data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")
+            d.encode(eeprom, res)
+
+    def add_descriptor(self, descriptor):
+        self.descriptors.append(descriptor)

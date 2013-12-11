@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+import sys
+import argparse
+from eeprom import parser
+
+# Print offset: binary hex
+def pretty(bs, offsets):
+    for i, byte in enumerate(bs.cut(8)):
+        if i in offsets:
+            print(offsets[i])
+
+        val = byte.uint
+        out = "     {0:02x}: {1:08b} {1:02x}".format(i, val)
+        val &= 0x7f
+        if (val >= 0x20 and val < 0x7f):
+            out += " \"{}\"".format(chr(val))
+        print(out)
+
+def itemize(lst):
+    return '\n'.join(' - ' + i for i in lst)
+
+def main():
+    argparser = argparse.ArgumentParser(
+        description='Generate Pinoccio backpack EEPROM contents from a YAML description.',
+        epilog='If no output file (-o) is given, the output is written in a (somewhat) human readable format on stdout',
+    )
+    argparser.add_argument('-o', metavar='OUT.bin', dest='output',
+                        help='The output file (binary)')
+    argparser.add_argument('file', metavar='FILE.yaml',
+                        help='The YAML file to parse')
+    args = argparser.parse_args()
+
+    with open(args.file, "r") as f:
+        (eep, errors) = parser.parse(f)
+
+    if eep:
+        res = eep.encode()
+
+        if args.output:
+            with open(args.output, 'wb') as f:
+                f.write(res.data.tobytes())
+        else:
+            pretty(res.data, res.offsets)
+        if (res.roundings):
+            sys.stdout.write("\n")
+            sys.stdout.write("Roundings:\n")
+            sys.stdout.write(itemize(res.roundings))
+            sys.stdout.write("\n")
+
+        errors.extend(res.errors)
+
+    if (errors):
+        sys.stderr.write("\n")
+        sys.stderr.write("#################################\n")
+        sys.stderr.write("#           ERRORS              #\n")
+        sys.stderr.write("#################################\n")
+        sys.stderr.write("\n")
+        sys.stderr.write(itemize(errors))
+        sys.stderr.write("\n")
+    else:
+        sys.stdout.write("\n")
+        sys.stdout.write("#################################\n")
+        sys.stdout.write("#             OK!               #\n")
+        sys.stdout.write("#################################\n")
+
+if __name__ == '__main__':
+    main()
