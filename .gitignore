@@ -1,2 +1,4 @@
 eagle/*#*
 .DS_Store
+*.swp
+*.pyc
