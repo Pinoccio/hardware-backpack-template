@@ -144,7 +144,7 @@
 #endif
 
 // Offset of the unique ID within the EEPROM
-uint8_t const UNIQUE_ID_OFFSET = 2;
+uint8_t const UNIQUE_ID_OFFSET = 3;
 
 // Protocol timings, in timer0 clock cycles (which runs at F_CPU / 8)
 #define US_TO_CLOCKS(x) (unsigned long)(x * F_CPU / 8 / 1000000)
