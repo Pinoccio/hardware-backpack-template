@@ -57,7 +57,6 @@ class Encoded:
         self.data.append(pack('uint:n', e, n = fmt.sbits))
 
 class EEPROM:
-    checksum_descriptor_type=0x4
     header_schema = Schema({
         Required('layout_version')        : Uint(8, minimum = 1, maximum = 1),
         Required('eeprom_size')           : Uint(8),
@@ -117,9 +116,12 @@ class EEPROM:
         if (len(res.data) % 8 != 0):
             raise ValueError("Not an integer number of bytes: {} bits".format(len(data)))
 
+        # Now we know how big the EEPROM contents has become, store it
+        # at 2 byte offset from the start
+        res.data[16:24] = len(res.data) // 8 + 2
+
         # append the checksum descriptor
         res.offsets[res.data.len // 8] = "Checksum"
-        res.append(pack('uint:8', self.checksum_descriptor_type))
         res.append(pack('uintbe:16', eeprom_crc(res.data.bytes)))
 
         if (len(res.data) // 8  > self.d['eeprom_size']):
@@ -130,6 +132,7 @@ class EEPROM:
     def encode_header(self, res):
         res.append(pack('uint:8', self.d['layout_version']))
         res.append(pack('uint:8', self.d['eeprom_size']))
+        res.append(pack('uint:8', 0)) # Used EEPROM size
         uid = BitArray()
         uid.append(pack('uint:8', self.d['bus_protocol_version']))
         uid.append(pack('uintbe:16', self.d['model']))
