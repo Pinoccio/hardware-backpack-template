@@ -12,7 +12,7 @@ header:
   eeprom_size           : 64
   bus_protocol_version  : 1
   model                 : 0x0001
-  serial                : 0
+  serial                : 0x4F
   hardware_revision     : 0x10
   firmware_version      : 1
   name                  : "wifi"
@@ -22,12 +22,7 @@ groups:
     descriptors:
       - type        : spi-slave
         ss_pin      : D7
-        speed       : 0 # TODO
-
-      - type        : uart
-        rx_pin      : TX1
-        tx_pin      : RX1
-        speed       : 115200
+        speed       : 3
 
       - type        : io-pin
         name        : "pgm"
@@ -35,34 +30,31 @@ groups:
 
       - type        : power-usage
         pin         : VBAT
-        # TODO: These are dummy values
         minimum     : 0
-        typical     : 1
-        maximum     : 100
+        typical     : 104
+        maximum     : 265
 
 
   - name: sd
     descriptors:
       - type        : spi-slave
         ss_pin      : D8
-        speed       : 0 # TODO
+        speed       : 25
 
       - type        : power-usage
         pin         : 3V3
-        # TODO: These are dummy values
         minimum     : 0
-        typical     : 1
+        typical     : 20
         maximum     : 100
 
   - name: eep
     descriptors:
       - type        : spi-slave
         ss_pin      : SS
-        speed       : 33 # TODO, is this really 33Mhz?
+        speed       : 33
 
       - type        : power-usage
         pin         : 3V3
-        # TODO: These are dummy values
         minimum     : 0
-        typical     : 1
-        maximum     : 100
+        typical     : 4
+        maximum     : 15
