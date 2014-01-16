@@ -23,17 +23,15 @@ draft and as such open for change.
 Global Structure
 ================
 The EEPROM consists of two main parts: A fixed-size header, followed by
-an arbitrary number of variable-length descriptors.
+an arbitrary number of variable-length descriptors and finally a
+checksum.
 
 The format and size of the header is fixed (for a given EEPROM layout
 version). The size and format of each descriptor is determined by its
 first byte, which indicates the descriptor type.
 
-In the last descriptor, there is a CRC checksum calculated over the
-entire EEPROM contents up to that byte.
-
-Any data after the checksum descriptor should not be parsed. It is
-recommended to write 0xff bytes after the checksum descriptor to prevent
+Any unused bytes after the the checksum should not be parsed. It is
+recommended to write 0xff bytes after the checksum to prevent
 accidentally interpreting them as data.
 
 ----------
@@ -73,12 +71,12 @@ The header contains the following info. Offset and size is in bytes.
         +==========+============+============+============+============+============+============+============+============+
         | 0        | EEPROM layout version                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | EEPROM size                                                                                           |
+        | 1        | Total EEPROM size                                                                                     |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        || Backpack unique identifier                                                                           |
+        | 2        | Used EEPROM size                                                                                      |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 3        || Backpack unique identifier                                                                           |
         +----------+| (8 bytes)                                                                                            +
-        | 3        |                                                                                                       |
-        +----------+                                                                                                       +
         | 4        |                                                                                                       |
         +----------+                                                                                                       +
         | 5        |                                                                                                       |
@@ -90,10 +88,12 @@ The header contains the following info. Offset and size is in bytes.
         | 8        |                                                                                                       |
         +----------+                                                                                                       +
         | 9        |                                                                                                       |
+        +----------+                                                                                                       +
+        | a        |                                                                                                       |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | a        | Firmware version                                                                                      |
+        | b        | Firmware version                                                                                      |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || b       || last?     || Backpack name                                                                           |
+        || c       || last?     || Backpack name                                                                           |
         || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
@@ -120,6 +120,11 @@ the same name. The name is mostly intended for user display, actual code
 running on the scout should use the model identifier to select backpacks
 to talk to instead. The format of the name is the same as that used for
 descriptor names, see below.
+
+There are two EEPROM sizes: The total size that is available and the
+amount of data that is currently stored in the EEPROM (including the
+header and checksum). This means that the latter also defines where the
+last descriptor ends and the checksum byte is.
 
 .. admonition:: Rationale: Firmware version
 
@@ -841,30 +846,12 @@ the first different byte, which is the start of the next descriptor.
         descriptor, without having to move all of the subsequent
         descriptors.
 
+========
 Checksum
-""""""""
-This descriptor contains a checksum, calculated over all previous bytes
-(including the descriptor type byte of this descriptor).
-
-The checksum descriptor is always the last descriptor, no other
-descriptors are allowed after this one, nor can the checksum descriptor
-be omitted.
-
-The checksum descriptor does not have a name and is not considered to be
-part of a group.
-
-.. table:: Checksum layout
-        :class: align-center
-
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
-        +==========+============+============+============+============+============+============+============+============+
-        | 0        | Descriptor type                                                                                       |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | High checksum byte                                                                                    |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Low checksum byte                                                                                     |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+========
+The last byte in the used part of the EEPROM is a two-byte (big endian,
+MSB-first) checksum, calculated over all previous bytes (i.e. the header
+and all descriptors).
 
 The checksum value is calculated using the CRC algorithm over all bytes
 in the EEPROM up to the checksum. The CRC variant used is a non-standard
