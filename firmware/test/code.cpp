@@ -85,7 +85,7 @@ timings *current_timings;
 // Should perhaps be read from EEPROM, but for now hardcoding is fine
 #define EEPROM_SIZE 64
 // Ofset of the unique ID within the EEPROM
-#define UNIQUE_ID_OFFSET 2
+#define UNIQUE_ID_OFFSET 3
 
 #define lengthof(x) (sizeof(x)/sizeof(*x))
 
