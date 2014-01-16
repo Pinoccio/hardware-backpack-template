@@ -141,6 +141,6 @@ class EEPROM:
         # Calculate CRC over unique id
         uid.append(pack('uint:8', unique_id_crc(uid.bytes)))
         res.append(uid)
-        res.append(pack('uintbe:16', self.d['firmware_version']))
+        res.append(pack('uint:8', self.d['firmware_version']))
         res.append_string(self.d['name'])
 
