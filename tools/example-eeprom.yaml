@@ -12,7 +12,7 @@ header:
   eeprom_size           : 64
   bus_protocol_version  : 1
   model                 : 0x0001
-  serial                : 0x4F
+  serial                : 0x000001
   hardware_revision     : 0x10
   firmware_version      : 1
   name                  : "wifi"
