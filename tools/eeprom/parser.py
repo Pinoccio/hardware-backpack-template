@@ -82,7 +82,10 @@ def parse(f):
                 # Validate descriptor
                 d = desc_schema(d)
             except MultipleInvalid as e:
-                errors.extend(map(str, e.errors))
+                gname = g['name']
+                dname = d.get('name', d['type'])
+                for err in e.errors:
+                    errors.append("In {}.{}: {}".format(gname, dname, str(err)))
                 continue
 
             group.add_descriptor(cls(d))
