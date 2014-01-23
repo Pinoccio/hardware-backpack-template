@@ -51,7 +51,7 @@ class SpiSlaveDescriptor(Descriptor):
         return Schema({
             Required('type')       : cls.descriptor_name,
             Required('ss_pin')     : pin,
-            Required('speed')      : int,
+            Required('speed')      : Any(float, int),
             Optional('name')       : str,
         })
 
