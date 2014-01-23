@@ -472,11 +472,11 @@ value.
                 byte = 0x56 \\
                 e = 5 \\
                 s = 0x6 = 0110_2 \\
-                exponent = e + e_bias = 5 − 6 = −1 \\
+                exponent = e - e_bias = 5 − 6 = −1 \\
                 significand = 1.0110_2 \\
                 \\
-                value = significand × 2^{exponent} = 0.0110_2 × 2^{−1} \\
-                value = 0.11011_2 ≈ 0.688\ Mhz = 688\ kHz
+                value = significand × 2^{exponent} = 1.0110_2 × 2^{−1} \\
+                value = 0.10110_2 ≈ 0.688\ Mhz = 688\ kHz
 
         Denormal numbers (*e = 0*) are decoded with an implicit leading
         "0.", with the same exponent as values with *e = 1*):
@@ -486,11 +486,11 @@ value.
                 byte = 0x0a \\
                 e = 0 \\
                 s = 0xa = 1010_2 \\
-                exponent = 1 + e_bias = 1 − 6 = -5 \\
+                exponent = 1 - e_bias = 1 − 6 = -5 \\
                 significand = 0.1010_2 \\
                 \\
                 value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
-                value ≈ 0.0195\ Mhz = 19.5\ kHz
+                value = 0.000001010_2 ≈ 0.0195\ Mhz = 19.5\ kHz
 
 .. table:: SPI speed values
         :class: align-right
@@ -709,22 +709,22 @@ This descriptor does not have a name.
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 1        | *reserved*              | Power pin number                                                            |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Minimum power usage exponent         | Minimum power usage signifcand                                 |
+        | 2        | Minimum power usage exponent                      | Minimum power usage signifcand                    |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Typical power usage exponent         | Typical power usage signifcand                                 |
+        | 3        | Typical power usage exponent                      | Typical power usage signifcand                    |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 4        | Maximum power usage exponent         | Maximum power usage signifcand                                 |
+        | 4        | Maximum power usage exponent                      | Maximum power usage signifcand                    |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
-The power usage fields use a minifloat format that expresses the speed
-in MHz.
+The power usage fields use a minifloat format that expresses the power
+usage in μA.
 
 :sign bit: no
 :significand: 4 bits
 :exponent: 4 bits
 :exponent bias: −4 (*i.e.,* exponent value of 1 means ×2\ :sup:`5`)
 :significands: 1.0000\ :sub:`2` to 1.1111\ :sub:`2` (normal), 0.0000\ :sub:`2` to 0.1111\ :sub:`2` (denormal)
-:exponents: −5 to 9 (normal), −5 (denormal)
+:exponents: 5 to 19 (normal), 5 (denormal)
 
 Note that there are no special values like NaN and infinity, so the
 maximum exponent value is not treated specially. The value 0 means the
@@ -743,11 +743,11 @@ value.
                 byte = 0x56 \\
                 e = 5 \\
                 s = 0x6 = 0110_2 \\
-                exponent = e + e_bias = 5 − (−4) = 9 \\
+                exponent = e - e_bias = 5 − (−4) = 9 \\
                 significand = 1.0110_2 \\
                 \\
-                value = significand × 2^{exponent} = 0.0110_2 × 2^{9} \\
-                value = 101100000_2 = 704μA
+                value = significand × 2^{exponent} = 1.0110_2 × 2^{9} \\
+                value = 1011000000_2 = 704μA
 
         Denormal numbers (*e = 0*) are decoded with an implicit leading
         "0.", with the same exponent as values with *e = 1*):
@@ -757,7 +757,7 @@ value.
                 byte = 0x0a \\
                 e = 0 \\
                 s = 0xa = 1010_2 \\
-                exponent = 1 + e_bias = 1 − (−4) = 5 \\
+                exponent = 1 - e_bias = 1 − (−4) = 5 \\
                 significand = 0.1010_2 \\
                 \\
                 value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
