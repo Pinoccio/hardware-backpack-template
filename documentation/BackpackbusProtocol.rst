@@ -1,6 +1,6 @@
-==============================
+******************************
 Pinoccio Backpack Bus Protocol
-==============================
+******************************
 This protocol is intended to allow a Pinoccio scout discover all
 backpacks connected to it and to allow communicating with these
 backpacks.

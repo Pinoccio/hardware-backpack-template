@@ -2,9 +2,9 @@
 .. |es| replace:: :sub:`e`\\\ :sup:`s`
 
 
-===============================
+*******************************
 Pinoccio Backpack EEPROM Layout
-===============================
+*******************************
 Every backpack (expansion board) intended for use with the Pinoccio scout board
 contains a small amount of EEPROM, which can be read and written through
 a single wire interface called the backpack bus. The protocol used over
