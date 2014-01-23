@@ -75,21 +75,21 @@ The header contains the following info. Offset and size is in bytes.
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 2        | Used EEPROM size                                                                                      |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        || Backpack unique identifier                                                                           |
-        +----------+| (8 bytes)                                                                                            +
-        | 4        |                                                                                                       |
+        | 3        | Protocol major version number                                                                         |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 4        | Model identifier                                                                                      |
         +----------+                                                                                                       +
         | 5        |                                                                                                       |
-        +----------+                                                                                                       +
-        | 6        |                                                                                                       |
-        +----------+                                                                                                       +
-        | 7        |                                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 6        | Hardware revision                                                                                     |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 7        | Serial number                                                                                         |
         +----------+                                                                                                       +
         | 8        |                                                                                                       |
         +----------+                                                                                                       +
-        | 9        |                                                                                                       |
-        +----------+                                                                                                       +
-        | a        |                                                                                                       |
+        | 0        |                                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | a        | Unique ID checksum (over bytes 3-a)                                                                   |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | b        | Firmware version                                                                                      |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
@@ -97,12 +97,38 @@ The header contains the following info. Offset and size is in bytes.
         || |vdots| || |vdots|   || |vdots|                                                                                 |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
-The backpack unique id contains a few subfields. See the Pinoccio
-Backpack Bus Protocol specification for how the id is composed.
-
 The Backpack unique id is read-only, meaning it cannot be changed
 through the Backpack Bus protocol.
 
+---------------------
+EEPROM layout version
+---------------------
+The version of this specification according to which the EEPROM are
+layed out. This byte contains just the major part of the version, the
+minor part should not be needed when interpreting the EEPROM contents
+(see `Future versions and compatibility`_ below).
+
+-----------
+EEPROM size
+-----------
+There are two EEPROM sizes: The total size that is available and the
+amount of data that is currently stored in the EEPROM (including the
+header and checksum). This means that the latter also defines where the
+last descriptor ends and the checksum byte is.
+
+-----------------
+Unique identifier
+-----------------
+The bytes from the Protocol version up to and including the Unique ID
+checksum constitute the unique identifier, as used in the Pinoccio
+Backpack Bus Protocol enumeration process. The meaning of these 8 bytes
+is repeated in the above figure for convenience, but the exact meaning
+of them, including the checksum algorithm used, is defined by the
+protocol specification instead.
+
+----------------
+Firmware version
+----------------
 The firmware version listed is about the code running inside the
 microcontroller in the backpack, that listens to the backpack bus and
 allows accessing the EEPROM. This specification does not mandate any
@@ -121,10 +147,6 @@ running on the scout should use the model identifier to select backpacks
 to talk to instead. The format of the name is the same as that used for
 descriptor names, see below.
 
-There are two EEPROM sizes: The total size that is available and the
-amount of data that is currently stored in the EEPROM (including the
-header and checksum). This means that the latter also defines where the
-last descriptor ends and the checksum byte is.
 
 .. admonition:: Rationale: Firmware version
 
