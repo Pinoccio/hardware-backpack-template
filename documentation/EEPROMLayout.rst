@@ -137,6 +137,9 @@ reasonable. Furthermore, this version does not need to be globally
 unique. Instead, it is expected to be meaningful only within the same
 backpack model.
 
+-------------
+Backpack name
+-------------
 The backpack name gives a short name for the backpack, that can be used
 to identify the backpack when multiple backpacks are connected to the
 scout. In general, this name should be the same for all backpacks with
