@@ -505,8 +505,13 @@ list of identifiers in use will be published somewhere.
 -----------------
 Hardware revision
 -----------------
-The hardware revision field should start at 01 and be incremented
-whenever a significant change in the hardware is made.
+The hardware revision indicates a version in a major.minor style, where
+the upper 4 bits indicate the major version and the lower 4 bits
+indicate the minor version. For example, version 1.0 would be 0x10,
+whereas version 4.10 would be 0x4a.
+
+The revision field should be changed whenever a change in the hardware
+is made.
 
 -------------
 Serial number
