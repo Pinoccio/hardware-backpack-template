@@ -496,13 +496,27 @@ Value      Meaning
 0x59       A checksum
 =========  =====================
 
+----------------
+Model identifier
+----------------
 Model identifiers are assigned by the Pinoccio company on request. A
-list of identifiers in use will be published somewhere. The hardware
-revision field should start at 01 and be incremented whenever a
-significant change in the hardware is made. The serial number should
-start at 000001 whenever the hardware revision is incremented and is
-unique for a given model and revision.
+list of identifiers in use will be published somewhere.
 
+-----------------
+Hardware revision
+-----------------
+The hardware revision field should start at 01 and be incremented
+whenever a significant change in the hardware is made.
+
+-------------
+Serial number
+-------------
+The serial number should start at 000001 whenever the hardware revision
+is incremented and is unique within a given model and revision.
+
+--------
+Checksum
+--------
 The checksum byte is calculated using the CRC algorithm with the 7
 preceding bytes as input data. The CRC variant used is a non-standard
 one, as proposed by P. Koopman in the paper `CRC Selection for Embedded
