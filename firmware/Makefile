@@ -8,7 +8,7 @@ HFUSE=0xfb
 LFUSE=0x21
 
 ifeq ($(shell avr-gcc $(CFLAGS) --print-file-name $(CRT_FILE)),$(CRT_FILE))
-$(error "Gcc couldn't find $(CRT_FILE), you probably haven't applied the /usr/lib/avr/lib/avr25/tiny-stack workaround suggested in backpack.c? Short version: run ln -s /usr/lib/avr/lib/avr25 /usr/lib/avr/lib/avr25/tiny-stack")
+$(error "Gcc couldn't find $(CRT_FILE), you probably haven't applied the /usr/lib/avr/lib/avr25/tiny-stack workaround suggested in firmware.c? Short version: run ln -s /usr/lib/avr/lib/avr25 /usr/lib/avr/lib/avr25/tiny-stack")
 endif
 
 # Don't use jump tables, they make the code bigger
@@ -19,24 +19,24 @@ CFLAGS+=-fno-jump-tables
 
 -include Makefile.local
 
-all: upload
+all: firmware.hex
 
-backpack.S: backpack.c protocol.h Makefile
+firmware.S: firmware.c protocol.h Makefile
 	avr-gcc -S $(CFLAGS) $< -o $@ -fwhole-program
 
-backpack.elf: backpack.c protocol.h Makefile
+firmware.elf: firmware.c protocol.h Makefile
 	avr-gcc -g $(CFLAGS) $< -o $@ -fwhole-program
 
-backpack.hex: backpack.elf
+firmware.hex: firmware.elf
 	avr-objcopy -O ihex $< $@
 
-upload: backpack.hex
+upload: firmware.hex
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -U flash:w:$<
 
-dump: backpack.elf
+dump: firmware.elf
 	avr-objdump -S $< | less
 
-size: backpack.elf
+size: firmware.elf
 	avr-size -C $<
 
 read_eeprom:
