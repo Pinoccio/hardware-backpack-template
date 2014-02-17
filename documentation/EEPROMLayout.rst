@@ -375,6 +375,289 @@ A name must be specified for this descriptor, there is no default.
         Does this descriptor need some kind of group type (physical
         section / IC / logical section / ...) field or other metadata?
 
+Power usage
+"""""""""""
+This describes the power usage of (a part of) the backpack, as drawn
+from a particular power pin.
+
+A backpack should declare a power usage descriptor for every power line
+it draws from. Within a group, there must not be more than one power
+usage descriptor for a given pin.
+
+If this descriptor appears as part of a group, it is assumed to describe
+the power usage of that particular part of the backpack. If the
+descriptor is in the default group, it is taken to mean the power usage
+of the entire backpack, excluding any groups that have their own power
+usage desriptors.
+
+This means that the total power usage of the backpack must be the sum of
+all power usage descriptors in the EEPROM.
+
+This descriptor does not have a name.
+
+.. table:: Power usage descriptor
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | *reserved*              | Power pin number                                                            |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 2        | Minimum power usage exponent                      | Minimum power usage signifcand                    |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 3        | Typical power usage exponent                      | Typical power usage signifcand                    |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 4        | Maximum power usage exponent                      | Maximum power usage signifcand                    |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+The power usage fields use a minifloat format that expresses the power
+usage in μA.
+
+:sign bit: no
+:significand: 4 bits
+:exponent: 4 bits
+:exponent bias: −4 (*i.e.,* exponent value of 1 means ×2\ :sup:`5`)
+:significands: 1.0000\ :sub:`2` to 1.1111\ :sub:`2` (normal), 0.0000\ :sub:`2` to 0.1111\ :sub:`2` (denormal)
+:exponents: 5 to 19 (normal), 5 (denormal)
+
+Note that there are no special values like NaN and infinity, so the
+maximum exponent value is not treated specially. The value 0 means the
+speed is unknown or otherwise cannot be defined.
+
+Power usage values should be rounded *up* to the nearest available
+value.
+
+.. admonition:: Example: Decoding power usage values
+
+        Normal numbers (*e ≠ 0*) are decoded with an implicit leading
+        "1.":
+
+        .. math::
+
+                byte = 0x56 \\
+                e = 5 \\
+                s = 0x6 = 0110_2 \\
+                exponent = e - e_bias = 5 − (−4) = 9 \\
+                significand = 1.0110_2 \\
+                \\
+                value = significand × 2^{exponent} = 1.0110_2 × 2^{9} \\
+                value = 1011000000_2 = 704μA
+
+        Denormal numbers (*e = 0*) are decoded with an implicit leading
+        "0.", with the same exponent as values with *e = 1*):
+
+        .. math::
+
+                byte = 0x0a \\
+                e = 0 \\
+                s = 0xa = 1010_2 \\
+                exponent = 1 - e_bias = 1 − (−4) = 5 \\
+                significand = 0.1010_2 \\
+                \\
+                value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
+                value = 10100_2 = 20 μA
+
+
+.. table:: Power usage values
+        :class: align-right
+
+
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        |es|           0          1          2          3          4          5          6          7          8          9          a          b          c          d          e          f
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+        **0**    Unknown       2μA        4μA        6μA        8μA       10μA       12μA       14μA       16μA       18μA       20μA       22μA       24μA       26μA       28μA        30μA
+        **1**      32μA       34μA       36μA       38μA       40μA       42μA       44μA       46μA       48μA       50μA       52μA       54μA       56μA       58μA       60μA        62μA
+        **2**      64μA       68μA       72μA       76μA       80μA       84μA       88μA       92μA       96μA      100μA      104μA      108μA      112μA      116μA      120μA       124μA
+        **3**     128μA      136μA      144μA      152μA      160μA      168μA      176μA      184μA      192μA      200μA      208μA      216μA      224μA      232μA      240μA       248μA
+        **4**     256μA      272μA      288μA      304μA      320μA      336μA      352μA      368μA      384μA      400μA      416μA      432μA      448μA      464μA      480μA       496μA
+        **5**     512μA      544μA      576μA      608μA      640μA      672μA      704μA      736μA      768μA      800μA      832μA      864μA      896μA      928μA      960μA       992μA
+        **6**    1.02mA     1.09mA     1.15mA     1.22mA     1.28mA     1.34mA     1.41mA     1.47mA     1.54mA      1.6mA     1.66mA     1.73mA     1.79mA     1.86mA     1.92mA      1.98mA
+        **7**    2.05mA     2.18mA      2.3mA     2.43mA     2.56mA     2.69mA     2.82mA     2.94mA     3.07mA      3.2mA     3.33mA     3.46mA     3.58mA     3.71mA     3.84mA      3.97mA
+        **8**     4.1mA     4.35mA     4.61mA     4.86mA     5.12mA     5.38mA     5.63mA     5.89mA     6.14mA      6.4mA     6.66mA     6.91mA     7.17mA     7.42mA     7.68mA      7.94mA
+        **9**    8.19mA      8.7mA     9.22mA     9.73mA     10.2mA     10.8mA     11.3mA     11.8mA     12.3mA     12.8mA     13.3mA     13.8mA     14.3mA     14.8mA     15.4mA      15.9mA
+        **a**    16.4mA     17.4mA     18.4mA     19.5mA     20.5mA     21.5mA     22.5mA     23.6mA     24.6mA     25.6mA     26.6mA     27.6mA     28.7mA     29.7mA     30.7mA      31.7mA
+        **b**    32.8mA     34.8mA     36.9mA     38.9mA       41mA       43mA     45.1mA     47.1mA     49.2mA     51.2mA     53.2mA     55.3mA     57.3mA     59.4mA     61.4mA      63.5mA
+        **c**    65.5mA     69.6mA     73.7mA     77.8mA     81.9mA       86mA     90.1mA     94.2mA     98.3mA      102mA      106mA      111mA      115mA      119mA      123mA       127mA
+        **d**     131mA      139mA      147mA      156mA      164mA      172mA      180mA      188mA      197mA      205mA      213mA      221mA      229mA      238mA      246mA       254mA
+        **e**     262mA      279mA      295mA      311mA      328mA      344mA      360mA      377mA      393mA      410mA      426mA      442mA      459mA      475mA      492mA       508mA
+        **f**     524mA      557mA      590mA      623mA      655mA      688mA      721mA      754mA      786mA      819mA      852mA      885mA      918mA      950mA      983mA      1.02A
+        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
+
+Data
+""""
+This is a descriptor type that is not added during manufacturing, but
+can be added by the scout to store arbitrary information. The structure
+of this data is not defined at all, it is up to the scout to interpret
+this.
+
+Data descriptors are not considered part of any group and are
+recommended to be used only at the end of the EEPROM, just before the
+checksum.
+
+If not specfied, the name of this descriptor defaults to "data".
+
+.. table:: Data descriptor layout
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | has name   | Data length                                                                              |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || 2       || Data                                                                                                 |
+        || |vdots| || |vdots|                                                                                              |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        ||         || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+The data length indicates how many bytes of data are present, excluding
+the header bytes and name bytes.
+
+.. admonition:: Rationale:: Custom data
+
+        This descriptor could be used by the scout to store arbitrary
+        data, such as calibration or configuration settings.
+
+        It is expected that this data can be used by a backpack-specific
+        library to store things. No attempt is made to uniquely label
+        the data for a given purpose: it is expected that the code
+        running on the scout for a given backpack will know how to read
+        and write this data and that it will be the same code that
+        accesses the data every time.
+
+Single I/O pin
+""""""""""""""
+This describes a single I/O pin used by the backpack.
+
+A name must be specified for this descriptor, there is no default.
+
+.. table:: I/O pin descriptor layout
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | *reserved*              | Pin number                                                                  |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || 2       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+Any pins that are specified by other resources (e.g., MISO or the CS pin
+in an SPI resource) do not also need to be explicitly specified as an
+I/O pin resource.
+
+Power pins, including GND do not need to be explicitly specified either.
+
+.. admonition:: Future expansion: Usage field and metadata
+
+        In the original discussion, a "pin usage" field was proposed.
+        However, it's not quite clear what kind of values this should
+        contain. I originally wrote:
+
+
+                The usage field describes the way the pin is to be used.
+                This is mostly informative, but it can be used to
+                distinguish pins by a generic driver or to potentially
+                allow resource-sharing (e.g., when two backpacks both
+                use the same pin as an open-collector interrupt pin).
+
+        And suggested some potential usage types:
+
+                - Open-collector/push-pull interrupt active high/low, to
+                  set up interrupt handling automatically.
+                - LED, to allow turning it on and off through bitlash
+                - General digital input, general digital output, to set
+                  up pinMode automatically. Perhaps also have general
+                  input with pullup?
+                - PWM output
+                - Analog input
+                - Reset (active high/low), to have the backpack
+                  automatically reset when the Pinoccio resets?
+
+        Does any of this actually make sense? Or is this overengineering
+        and is it sufficient to just list that a pin is used (to detect
+        pin conflicts) and assign it a name (to allow libraries to work
+        without hardcoded pin numbers)?
+
+        Perhaps it makes sense to split up these usages into multiple
+        subfields (input/output, digital/analog, etc?).
+
+        For now, it seems sensible to just leave out this field and add
+        it a later layout version, when the scout-side code is further
+        along as well.
+
+.. admonition:: Rationale: Single I/O pins only
+
+        It seems overly verbose to use a complete descriptor for every
+        new pin. When declaring a lot of pins, chunking them together in
+        a descriptor seems useful to reduce overhead.
+
+        However, in practice, most of the pins will be indepenent and
+        thus need their own name and (once we add them) usage flags and
+        other metadata. This means that stacking together pins could
+        save the descriptor type byte for each pin, but we'll still need
+        the pin number and name, so the gain would be rather small. This
+        would also mean multiple resources (and names) are declared in
+        the same descriptor, which might make the parsing code more
+        complicated.
+
+        If at some point a backpack is produced that uses a bus of pins
+        (e.g., 4 or 8 pins who are identical except for the bit they
+        transfer and could also share a common name), introducing a new
+        descriptor for that makes sense.
+
+UART
+""""
+If not specfied, the name of this descriptor defaults to "uart".
+
+.. table:: UART descriptor layout
+        :class: align-center
+
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
+        +==========+============+============+============+============+============+============+============+============+
+        | 0        | Descriptor type                                                                                       |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 1        | *reserved*              | TX pin number (from backpack point of view)                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 2        | *reserved*              | RX pin number (from backpack point of view)                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        | 3        | has name   | *reserved*                           | Speed                                             |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+        || 4       || last?     || Resource name                                                                           |
+        || |vdots| || |vdots|   || |vdots|                                                                                 |
+        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
+
+The TX and RX pins are specified from the backpack point of view, so the
+pin in the TX field should correspond to an RX pin on the scout and vice
+versa.
+
+.. table:: UART Speed values
+
+        =====   ===============
+        Value   Meaning
+        =====   ===============
+        0       Unspecified
+        1       300 bps
+        2       600 bps
+        3       1200 bps
+        4       2400 bps
+        5       4800 bps
+        6       9600 bps
+        7       19200 bps
+        8       38400 bps
+        9       57600 bps
+        10      115200 bps
+        =====   ===============
+
 I²C slave
 """""""""
 This resource indicates an I²C slave is present that uses pins 21 as SCL
@@ -575,289 +858,6 @@ value.
         for the current scout design, we will at least get optimal
         speeds. But as you can see other common speeds like 20Mhz are
         also included.
-
-Single I/O pin
-""""""""""""""
-This describes a single I/O pin used by the backpack.
-
-A name must be specified for this descriptor, there is no default.
-
-.. table:: I/O pin descriptor layout
-        :class: align-center
-
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
-        +==========+============+============+============+============+============+============+============+============+
-        | 0        | Descriptor type                                                                                       |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*              | Pin number                                                                  |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 2       || last?     || Resource name                                                                           |
-        || |vdots| || |vdots|   || |vdots|                                                                                 |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-
-Any pins that are specified by other resources (e.g., MISO or the CS pin
-in an SPI resource) do not also need to be explicitly specified as an
-I/O pin resource.
-
-Power pins, including GND do not need to be explicitly specified either.
-
-.. admonition:: Future expansion: Usage field and metadata
-
-        In the original discussion, a "pin usage" field was proposed.
-        However, it's not quite clear what kind of values this should
-        contain. I originally wrote:
-
-
-                The usage field describes the way the pin is to be used.
-                This is mostly informative, but it can be used to
-                distinguish pins by a generic driver or to potentially
-                allow resource-sharing (e.g., when two backpacks both
-                use the same pin as an open-collector interrupt pin).
-
-        And suggested some potential usage types:
-
-                - Open-collector/push-pull interrupt active high/low, to
-                  set up interrupt handling automatically.
-                - LED, to allow turning it on and off through bitlash
-                - General digital input, general digital output, to set
-                  up pinMode automatically. Perhaps also have general
-                  input with pullup?
-                - PWM output
-                - Analog input
-                - Reset (active high/low), to have the backpack
-                  automatically reset when the Pinoccio resets?
-
-        Does any of this actually make sense? Or is this overengineering
-        and is it sufficient to just list that a pin is used (to detect
-        pin conflicts) and assign it a name (to allow libraries to work
-        without hardcoded pin numbers)?
-
-        Perhaps it makes sense to split up these usages into multiple
-        subfields (input/output, digital/analog, etc?).
-
-        For now, it seems sensible to just leave out this field and add
-        it a later layout version, when the scout-side code is further
-        along as well.
-
-.. admonition:: Rationale: Single I/O pins only
-
-        It seems overly verbose to use a complete descriptor for every
-        new pin. When declaring a lot of pins, chunking them together in
-        a descriptor seems useful to reduce overhead.
-
-        However, in practice, most of the pins will be indepenent and
-        thus need their own name and (once we add them) usage flags and
-        other metadata. This means that stacking together pins could
-        save the descriptor type byte for each pin, but we'll still need
-        the pin number and name, so the gain would be rather small. This
-        would also mean multiple resources (and names) are declared in
-        the same descriptor, which might make the parsing code more
-        complicated.
-
-        If at some point a backpack is produced that uses a bus of pins
-        (e.g., 4 or 8 pins who are identical except for the bit they
-        transfer and could also share a common name), introducing a new
-        descriptor for that makes sense.
-
-UART
-""""
-If not specfied, the name of this descriptor defaults to "uart".
-
-.. table:: UART descriptor layout
-        :class: align-center
-
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
-        +==========+============+============+============+============+============+============+============+============+
-        | 0        | Descriptor type                                                                                       |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*              | TX pin number (from backpack point of view)                                 |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | *reserved*              | RX pin number (from backpack point of view)                                 |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | has name   | *reserved*                           | Speed                                             |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 4       || last?     || Resource name                                                                           |
-        || |vdots| || |vdots|   || |vdots|                                                                                 |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-
-The TX and RX pins are specified from the backpack point of view, so the
-pin in the TX field should correspond to an RX pin on the scout and vice
-versa.
-
-.. table:: UART Speed values
-
-        =====   ===============
-        Value   Meaning
-        =====   ===============
-        0       Unspecified
-        1       300 bps
-        2       600 bps
-        3       1200 bps
-        4       2400 bps
-        5       4800 bps
-        6       9600 bps
-        7       19200 bps
-        8       38400 bps
-        9       57600 bps
-        10      115200 bps
-        =====   ===============
-
-Power usage
-"""""""""""
-This describes the power usage of (a part of) the backpack, as drawn
-from a particular power pin.
-
-A backpack should declare a power usage descriptor for every power line
-it draws from. Within a group, there must not be more than one power
-usage descriptor for a given pin.
-
-If this descriptor appears as part of a group, it is assumed to describe
-the power usage of that particular part of the backpack. If the
-descriptor is in the default group, it is taken to mean the power usage
-of the entire backpack, excluding any groups that have their own power
-usage desriptors.
-
-This means that the total power usage of the backpack must be the sum of
-all power usage descriptors in the EEPROM.
-
-This descriptor does not have a name.
-
-.. table:: Power usage descriptor
-        :class: align-center
-
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
-        +==========+============+============+============+============+============+============+============+============+
-        | 0        | Descriptor type                                                                                       |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | *reserved*              | Power pin number                                                            |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Minimum power usage exponent                      | Minimum power usage signifcand                    |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Typical power usage exponent                      | Typical power usage signifcand                    |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 4        | Maximum power usage exponent                      | Maximum power usage signifcand                    |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-
-The power usage fields use a minifloat format that expresses the power
-usage in μA.
-
-:sign bit: no
-:significand: 4 bits
-:exponent: 4 bits
-:exponent bias: −4 (*i.e.,* exponent value of 1 means ×2\ :sup:`5`)
-:significands: 1.0000\ :sub:`2` to 1.1111\ :sub:`2` (normal), 0.0000\ :sub:`2` to 0.1111\ :sub:`2` (denormal)
-:exponents: 5 to 19 (normal), 5 (denormal)
-
-Note that there are no special values like NaN and infinity, so the
-maximum exponent value is not treated specially. The value 0 means the
-speed is unknown or otherwise cannot be defined.
-
-Power usage values should be rounded *up* to the nearest available
-value.
-
-.. admonition:: Example: Decoding power usage values
-
-        Normal numbers (*e ≠ 0*) are decoded with an implicit leading
-        "1.":
-
-        .. math::
-
-                byte = 0x56 \\
-                e = 5 \\
-                s = 0x6 = 0110_2 \\
-                exponent = e - e_bias = 5 − (−4) = 9 \\
-                significand = 1.0110_2 \\
-                \\
-                value = significand × 2^{exponent} = 1.0110_2 × 2^{9} \\
-                value = 1011000000_2 = 704μA
-
-        Denormal numbers (*e = 0*) are decoded with an implicit leading
-        "0.", with the same exponent as values with *e = 1*):
-
-        .. math::
-
-                byte = 0x0a \\
-                e = 0 \\
-                s = 0xa = 1010_2 \\
-                exponent = 1 - e_bias = 1 − (−4) = 5 \\
-                significand = 0.1010_2 \\
-                \\
-                value = significand × 2^{exponent} = 0.1010_2 × 2^{5} \\
-                value = 10100_2 = 20 μA
-
-
-.. table:: Power usage values
-        :class: align-right
-
-
-        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
-        |es|           0          1          2          3          4          5          6          7          8          9          a          b          c          d          e          f
-        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
-        **0**    Unknown       2μA        4μA        6μA        8μA       10μA       12μA       14μA       16μA       18μA       20μA       22μA       24μA       26μA       28μA       30μA 
-        **1**      32μA       34μA       36μA       38μA       40μA       42μA       44μA       46μA       48μA       50μA       52μA       54μA       56μA       58μA       60μA       62μA 
-        **2**      64μA       68μA       72μA       76μA       80μA       84μA       88μA       92μA       96μA      100μA      104μA      108μA      112μA      116μA      120μA      124μA 
-        **3**     128μA      136μA      144μA      152μA      160μA      168μA      176μA      184μA      192μA      200μA      208μA      216μA      224μA      232μA      240μA      248μA 
-        **4**     256μA      272μA      288μA      304μA      320μA      336μA      352μA      368μA      384μA      400μA      416μA      432μA      448μA      464μA      480μA      496μA 
-        **5**     512μA      544μA      576μA      608μA      640μA      672μA      704μA      736μA      768μA      800μA      832μA      864μA      896μA      928μA      960μA      992μA 
-        **6**    1.02mA     1.09mA     1.15mA     1.22mA     1.28mA     1.34mA     1.41mA     1.47mA     1.54mA      1.6mA     1.66mA     1.73mA     1.79mA     1.86mA     1.92mA     1.98mA 
-        **7**    2.05mA     2.18mA      2.3mA     2.43mA     2.56mA     2.69mA     2.82mA     2.94mA     3.07mA      3.2mA     3.33mA     3.46mA     3.58mA     3.71mA     3.84mA     3.97mA 
-        **8**     4.1mA     4.35mA     4.61mA     4.86mA     5.12mA     5.38mA     5.63mA     5.89mA     6.14mA      6.4mA     6.66mA     6.91mA     7.17mA     7.42mA     7.68mA     7.94mA 
-        **9**    8.19mA      8.7mA     9.22mA     9.73mA     10.2mA     10.8mA     11.3mA     11.8mA     12.3mA     12.8mA     13.3mA     13.8mA     14.3mA     14.8mA     15.4mA     15.9mA 
-        **a**    16.4mA     17.4mA     18.4mA     19.5mA     20.5mA     21.5mA     22.5mA     23.6mA     24.6mA     25.6mA     26.6mA     27.6mA     28.7mA     29.7mA     30.7mA     31.7mA 
-        **b**    32.8mA     34.8mA     36.9mA     38.9mA       41mA       43mA     45.1mA     47.1mA     49.2mA     51.2mA     53.2mA     55.3mA     57.3mA     59.4mA     61.4mA     63.5mA 
-        **c**    65.5mA     69.6mA     73.7mA     77.8mA     81.9mA       86mA     90.1mA     94.2mA     98.3mA      102mA      106mA      111mA      115mA      119mA      123mA      127mA 
-        **d**     131mA      139mA      147mA      156mA      164mA      172mA      180mA      188mA      197mA      205mA      213mA      221mA      229mA      238mA      246mA      254mA 
-        **e**     262mA      279mA      295mA      311mA      328mA      344mA      360mA      377mA      393mA      410mA      426mA      442mA      459mA      475mA      492mA      508mA 
-        **f**     524mA      557mA      590mA      623mA      655mA      688mA      721mA      754mA      786mA      819mA      852mA      885mA      918mA      950mA      983mA     1.02A  
-        =====  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========  =========
-
-Data
-""""
-This is a descriptor type that is not added during manufacturing, but
-can be added by the scout to store arbitrary information. The structure
-of this data is not defined at all, it is up to the scout to interpret
-this.
-
-Data descriptors are not considered part of any group and are
-recommended to be used only at the end of the EEPROM, just before the
-checksum.
-
-If not specfied, the name of this descriptor defaults to "data".
-
-.. table:: Data descriptor layout
-        :class: align-center
-
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        + offset   | 7          | 6          | 5          | 4          | 3          | 2          | 1          | 0          |
-        +==========+============+============+============+============+============+============+============+============+
-        | 0        | Descriptor type                                                                                       |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 1        | has name   | Data length                                                                              |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        || 2       || Data                                                                                                 |
-        || |vdots| || |vdots|                                                                                              |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        ||         || last?     || Resource name                                                                           |
-        || |vdots| || |vdots|   || |vdots|                                                                                 |
-        +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-
-The data length indicates how many bytes of data are present, excluding
-the header bytes and name bytes.
-
-.. admonition:: Rationale:: Custom data
-
-        This descriptor could be used by the scout to store arbitrary
-        data, such as calibration or configuration settings.
-
-        It is expected that this data can be used by a backpack-specific
-        library to store things. No attempt is made to uniquely label
-        the data for a given purpose: it is expected that the code
-        running on the scout for a given backpack will know how to read
-        and write this data and that it will be the same code that
-        accesses the data every time.
 
 Empty
 """""
