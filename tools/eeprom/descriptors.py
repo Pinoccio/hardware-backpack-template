@@ -40,7 +40,7 @@ class Descriptor:
             return getattr(self.__class__, 'default_name', None)
 
 class GroupDescriptor(Descriptor):
-    descriptor_type = 0x4
+    descriptor_type = 0x1
 
     @classmethod
     def get_schema(cls):
@@ -68,7 +68,7 @@ class GroupDescriptor(Descriptor):
         self.descriptors.append(descriptor)
 
 class PowerUsageDescriptor(Descriptor):
-    descriptor_type = 0x5
+    descriptor_type = 0x2
     descriptor_name = 'power-usage'
     usage_format = minifloat.MinifloatFormat(4, 4, -4, math.ceil)
     usage_unit = 'μA'
@@ -94,7 +94,7 @@ class PowerUsageDescriptor(Descriptor):
 # TODO: DataDescriptor
 
 class IOPinDescriptor(Descriptor):
-    descriptor_type = 0x3
+    descriptor_type = 0x4
     descriptor_name = 'io-pin'
 
     @classmethod
@@ -112,7 +112,7 @@ class IOPinDescriptor(Descriptor):
         res.append_string(self.d['name'])
 
 class UartDescriptor(Descriptor):
-    descriptor_type = 0x2
+    descriptor_type = 0x5
     descriptor_name = 'uart'
     default_name = "uart"
 
@@ -158,7 +158,7 @@ class UartDescriptor(Descriptor):
 # TODO: I2cSlaveDescriptor
 
 class SpiSlaveDescriptor(Descriptor):
-    descriptor_type = 0x1
+    descriptor_type = 0x7
     descriptor_name = 'spi-slave'
     default_name = "spi"
     speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
