@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import binascii
 import argparse
 from eeprom import parser
 
@@ -25,11 +26,17 @@ def main():
         description='Generate Pinoccio backpack EEPROM contents from a YAML description.',
         epilog='If no output file (-o) is given, the output is written in a (somewhat) human readable format on stdout',
     )
+    argparser.add_argument('--bitlash', action='store_true',
+                        help='Generate a bitlash command')
     argparser.add_argument('-o', metavar='OUT.bin', dest='output',
                         help='The output file (binary)')
     argparser.add_argument('file', metavar='FILE.yaml',
                         help='The YAML file to parse')
     args = argparser.parse_args()
+
+    if (args.output and args.bitlash):
+        sys.stderr.write("Cannot specify both -o and --bitlash")
+        return 1
 
     with open(args.file, "r") as f:
         (eep, errors) = parser.parse(f)
@@ -42,6 +49,19 @@ def main():
                 f.write(res.data.tobytes())
         else:
             pretty(res.data, res.offsets)
+            if args.bitlash:
+                bs = bytearray(res.data.tobytes())
+                # zero out the unique ID (this is not writable through
+                # the bitlash command, so don't suggest it is)
+                bs[3:11] = b'\00\00\00\00\00\00\00\00'
+                # Drop the checksum, this will be automatically calculated
+                # by the bitlash command
+                bs = bs[:-2]
+                sys.stdout.write("\nBitlash command to flash in this EEPROM (unique identifier will be preserved):\n");
+                sys.stdout.write("> backpack.eeprom.update(0, \"");
+                sys.stdout.write(binascii.hexlify(bs).decode('ascii'))
+                sys.stdout.write("\")\n")
+
         if (res.roundings):
             sys.stdout.write("\n")
             sys.stdout.write("Roundings:\n")
