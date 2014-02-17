@@ -62,4 +62,6 @@ eeprom_id: DATA=$(shell echo $(LAYOUT_VERSION)$(EEPROM_SIZE)$(ID)$(CHECKSUM) | t
 eeprom_id:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U "eeprom:w:$(DATA):m"
 
+clean:
+	rm -f firmware.S firmware.elf firmware.hex
 
