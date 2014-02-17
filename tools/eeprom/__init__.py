@@ -54,7 +54,7 @@ class Encoded:
             if value != rounded:
                 self.roundings.append("{0} {2} to {1} {2}".format(value, rounded, unit))
         self.data.append(pack('uint:n', e, n = fmt.ebits))
-        self.data.append(pack('uint:n', e, n = fmt.sbits))
+        self.data.append(pack('uint:n', s, n = fmt.sbits))
 
 class EEPROM:
     header_schema = Schema({
