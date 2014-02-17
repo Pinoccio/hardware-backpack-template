@@ -39,30 +39,77 @@ class Descriptor:
         except KeyError:
             return getattr(self.__class__, 'default_name', None)
 
-class SpiSlaveDescriptor(Descriptor):
-    descriptor_type = 0x1
-    descriptor_name = 'spi-slave'
-    default_name = "spi"
-    speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
-    speed_unit = 'Mhz'
+class GroupDescriptor(Descriptor):
+    descriptor_type = 0x4
+
+    @classmethod
+    def get_schema(cls):
+        return Schema({
+            Required('name')        : All(str, NotEmpty()),
+            Required('descriptors') : [
+                Descriptor.get_schema(),
+            ]
+        })
+
+    def __init__(self, *args, **kwargs):
+        self.descriptors = []
+        super(GroupDescriptor, self).__init__(*args, **kwargs)
+
+    def encode(self, eeprom, res):
+        res.offsets[res.data.len // 8] = self.__class__.__name__ + " " + self.d['name']
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append_string(self.d['name'])
+
+        for d in self.descriptors:
+            res.offsets[res.data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")
+            d.encode(eeprom, res)
+
+    def add_descriptor(self, descriptor):
+        self.descriptors.append(descriptor)
+
+class PowerUsageDescriptor(Descriptor):
+    descriptor_type = 0x5
+    descriptor_name = 'power-usage'
+    usage_format = minifloat.MinifloatFormat(4, 4, -4, math.ceil)
+    usage_unit = 'μA'
 
     @classmethod
     def get_schema(cls, pin, version):
         return Schema({
             Required('type')       : cls.descriptor_name,
-            Required('ss_pin')     : pin,
-            Required('speed')      : Any(float, int),
-            Optional('name')       : str,
+            Required('pin')        : pin,
+            Required('minimum')    : int,
+            Required('typical')    : int,
+            Required('maximum')    : int,
         })
 
     def encode(self, eeprom, res):
         res.append(pack('uint:8', self.descriptor_type))
-        res.append(pack('bool', 'name' in self.d))
-        res.append(pack('pad:1')) # reserved
-        res.append(pack('uint:6', self.d['ss_pin']))
-        res.append_minifloat(self.speed_format, self.speed_unit, self.d['speed'])
-        if ('name' in self.d):
-            res.append_string(self.d['name'])
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['pin']))
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['minimum'])
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['typical'])
+        res.append_minifloat(self.usage_format, self.usage_unit, self.d['maximum'])
+
+# TODO: DataDescriptor
+
+class IOPinDescriptor(Descriptor):
+    descriptor_type = 0x3
+    descriptor_name = 'io-pin'
+
+    @classmethod
+    def get_schema(cls, pin, version):
+        return Schema({
+            Required('type')       : cls.descriptor_name,
+            Required('pin')        : pin,
+            Required('name')       : All(str, NotEmpty()),
+        })
+
+    def encode(self, eeprom, res):
+        res.append(pack('uint:8', self.descriptor_type))
+        res.append(pack('pad:2')) # reserved
+        res.append(pack('uint:6', self.d['pin']))
+        res.append_string(self.d['name'])
 
 class UartDescriptor(Descriptor):
     descriptor_type = 0x2
@@ -108,47 +155,32 @@ class UartDescriptor(Descriptor):
         if ('name' in self.d):
             res.append_string(self.d['name'])
 
-class IOPinDescriptor(Descriptor):
-    descriptor_type = 0x3
-    descriptor_name = 'io-pin'
+# TODO: I2cSlaveDescriptor
+
+class SpiSlaveDescriptor(Descriptor):
+    descriptor_type = 0x1
+    descriptor_name = 'spi-slave'
+    default_name = "spi"
+    speed_format = minifloat.MinifloatFormat(4, 4, 6, math.floor)
+    speed_unit = 'Mhz'
 
     @classmethod
     def get_schema(cls, pin, version):
         return Schema({
             Required('type')       : cls.descriptor_name,
-            Required('pin')        : pin,
-            Required('name')       : All(str, NotEmpty()),
+            Required('ss_pin')     : pin,
+            Required('speed')      : Any(float, int),
+            Optional('name')       : str,
         })
 
     def encode(self, eeprom, res):
         res.append(pack('uint:8', self.descriptor_type))
-        res.append(pack('pad:2')) # reserved
-        res.append(pack('uint:6', self.d['pin']))
-        res.append_string(self.d['name'])
-
-class PowerUsageDescriptor(Descriptor):
-    descriptor_type = 0x5
-    descriptor_name = 'power-usage'
-    usage_format = minifloat.MinifloatFormat(4, 4, -4, math.ceil)
-    usage_unit = 'μA'
-
-    @classmethod
-    def get_schema(cls, pin, version):
-        return Schema({
-            Required('type')       : cls.descriptor_name,
-            Required('pin')        : pin,
-            Required('minimum')    : int,
-            Required('typical')    : int,
-            Required('maximum')    : int,
-        })
-
-    def encode(self, eeprom, res):
-        res.append(pack('uint:8', self.descriptor_type))
-        res.append(pack('pad:2')) # reserved
-        res.append(pack('uint:6', self.d['pin']))
-        res.append_minifloat(self.usage_format, self.usage_unit, self.d['minimum'])
-        res.append_minifloat(self.usage_format, self.usage_unit, self.d['typical'])
-        res.append_minifloat(self.usage_format, self.usage_unit, self.d['maximum'])
+        res.append(pack('bool', 'name' in self.d))
+        res.append(pack('pad:1')) # reserved
+        res.append(pack('uint:6', self.d['ss_pin']))
+        res.append_minifloat(self.speed_format, self.speed_unit, self.d['speed'])
+        if ('name' in self.d):
+            res.append_string(self.d['name'])
 
 class EmptyDescriptor(Descriptor):
     descriptor_type = 0xff
@@ -166,30 +198,3 @@ class EmptyDescriptor(Descriptor):
         for _ in range(self.d['length']):
             res.append(pack('uint:8', self.descriptor_type))
 
-class GroupDescriptor(Descriptor):
-    descriptor_type = 0x4
-
-    @classmethod
-    def get_schema(cls):
-        return Schema({
-            Required('name')        : All(str, NotEmpty()),
-            Required('descriptors') : [
-                Descriptor.get_schema(),
-            ]
-        })
-
-    def __init__(self, *args, **kwargs):
-        self.descriptors = []
-        super(GroupDescriptor, self).__init__(*args, **kwargs)
-
-    def encode(self, eeprom, res):
-        res.offsets[res.data.len // 8] = self.__class__.__name__ + " " + self.d['name']
-        res.append(pack('uint:8', self.descriptor_type))
-        res.append_string(self.d['name'])
-
-        for d in self.descriptors:
-            res.offsets[res.data.len // 8] = d.__class__.__name__ + " " + (d.effective_name() or "")
-            d.encode(eeprom, res)
-
-    def add_descriptor(self, descriptor):
-        self.descriptors.append(descriptor)
