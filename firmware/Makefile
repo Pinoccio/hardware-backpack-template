@@ -65,3 +65,4 @@ eeprom_id:
 clean:
 	rm -f firmware.S firmware.elf firmware.hex
 
+.PHONY: upload dump read_eeprom read_fuses write_fuses eeprom_id clean
