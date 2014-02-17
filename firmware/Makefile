@@ -63,6 +63,3 @@ eeprom_id:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U "eeprom:w:$(DATA):m"
 
 
-# Output assembly with addresses removed for easy diffing
-diffdump: backpack.elf
-	avr-objdump -S $< | sed 's/^[0-9a-f]* </</' | sed 's/^ *[0-9a-f]*://' | sed -r 's/([0-9a-f]{2} )*\s*((rjmp|rcall|br..)\s+).*/xx xx\t\t\2.../'
