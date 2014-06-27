@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
-import sys
-import binascii
-import argparse
-from eeprom import parser
+try:
+    import sys
+    import binascii
+    import argparse
+    from eeprom import parser
+except ImportError as e:
+    sys.stderr.write("Failed to load a required package\n")
+    sys.stderr.write("Try running 'pip3 install {}' to install it\n".format(e.name))
+    sys.exit(1)
 
 # Print offset: binary hex
 def pretty(bs, offsets):
