@@ -30,7 +30,7 @@ The format and size of the header is fixed (for a given EEPROM layout
 version). The size and format of each descriptor is determined by its
 first byte, which indicates the descriptor type.
 
-Any unused bytes after the the checksum should not be parsed. It is
+Any unused bytes after the checksum should not be parsed. It is
 recommended to write 0xff bytes after the checksum to prevent
 accidentally interpreting them as data.
 
@@ -51,7 +51,7 @@ bits, counting downward.
         development.
 
         The AVR architecture has a tendency towards little endian,
-        though the hardware does not really contain any realy multi-byte
+        though the hardware does not really contain any really multi-byte
         registers or instructions where endianness comes into play. It
         seems the avr-gcc implements multi-byte operations as
         little endian, but it seems there is no performance gain in
@@ -104,7 +104,7 @@ through the Backpack Bus protocol.
 EEPROM layout version
 ---------------------
 The version of this specification according to which the EEPROM are
-layed out. This byte contains just the major part of the version, the
+laid out. This byte contains just the major part of the version, the
 minor part should not be needed when interpreting the EEPROM contents
 (see `Future versions and compatibility`_ below).
 
@@ -178,14 +178,14 @@ calculated from the descriptor data.
 
 .. admonition:: Rationale: No explicit descriptor length
 
-        It seems obvious to also explicitely store the length of the
+        It seems obvious to also explicitly store the length of the
         descriptor, but it seems that's not really needed. A scout needs
         to know about the layout of a descriptor to be able to use it,
         so it will also know the descriptor length.
 
         An explicit length would help for future compatibility (a scout
         could skip an unknown descriptor because its length is
-        explicitely stored), but we don't really need this - we can
+        explicitly stored), but we don't really need this - we can
         easily expect a user to upgrade the firmware whenever they add a
         too-new backpack. Skipping an unknown descriptor is probably not
         very helpful, since it could cause a resource conflict to go
@@ -262,13 +262,13 @@ every pin number should be kept as reserved for future expansion.
         useful in a few situations:
 
         - When a pin is optional and can be connected through a solder
-          jumper, this allows explicitely indicating that a pin is
+          jumper, this allows explicitly indicating that a pin is
           disconnected (as opposed to not supported at all). When two
           variants of a backpack are available, this could allow both
           to have the same EEPROM structure and offsets, while still
           showing the difference.
         - Similar to the above, if a user removes a soldered jumper, he
-          will not have to remove the entirre descriptor but can just
+          will not have to remove the entire descriptor but can just
           flip a few bits.
         - Sometimes a particular resource will be only partially
           connected. Consider a UART that only has its TX pin connected,
@@ -307,7 +307,7 @@ all other descriptors belong to exactly one group.
         the start (and if they don't need groups, they're likely small
         and should have plenty or space available).
 
-        The second option seems gooed for backpack that have a multiple
+        The second option seems good for backpack that have a multiple
         parts that just need a single descriptor each. However, if you
         want to also describe the power usage of each part, this breaks
         again.
@@ -404,7 +404,7 @@ If this descriptor appears as part of a group, it is assumed to describe
 the power usage of that particular part of the backpack. If the
 descriptor is in the default group, it is taken to mean the power usage
 of the entire backpack, excluding any groups that have their own power
-usage desriptors.
+usage descriptors.
 
 This means that the total power usage of the backpack must be the sum of
 all power usage descriptors in the EEPROM.
@@ -421,11 +421,11 @@ This descriptor does not have a name.
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
         | 1        | *reserved*              | Power pin number                                                            |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 2        | Minimum power usage exponent                      | Minimum power usage signifcand                    |
+        | 2        | Minimum power usage exponent                      | Minimum power usage significand                   |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 3        | Typical power usage exponent                      | Typical power usage signifcand                    |
+        | 3        | Typical power usage exponent                      | Typical power usage significand                   |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
-        | 4        | Maximum power usage exponent                      | Maximum power usage signifcand                    |
+        | 4        | Maximum power usage exponent                      | Maximum power usage significand                   |
         +----------+------------+------------+------------+------------+------------+------------+------------+------------+
 
 The power usage fields use a minifloat format that expresses the power
@@ -512,7 +512,7 @@ Data descriptors are not considered part of any group and are
 recommended to be used only at the end of the EEPROM, just before the
 checksum.
 
-If not specfied, the name of this descriptor defaults to "data".
+If not specified, the name of this descriptor defaults to "data".
 
 .. table:: Data descriptor layout
         :class: align-center
@@ -616,7 +616,7 @@ Power pins, including GND do not need to be explicitly specified either.
         new pin. When declaring a lot of pins, chunking them together in
         a descriptor seems useful to reduce overhead.
 
-        However, in practice, most of the pins will be indepenent and
+        However, in practice, most of the pins will be independent and
         thus need their own name and (once we add them) usage flags and
         other metadata. This means that stacking together pins could
         save the descriptor type byte for each pin, but we'll still need
@@ -632,7 +632,7 @@ Power pins, including GND do not need to be explicitly specified either.
 
 UART
 """"
-If not specfied, the name of this descriptor defaults to "uart".
+If not specified, the name of this descriptor defaults to "uart".
 
 .. table:: UART descriptor layout
         :class: align-center
@@ -679,7 +679,7 @@ I²C slave
 This resource indicates an I²C slave is present that uses pins 21 as SCL
 and pin 22 as SDA.
 
-If not specfied, the name of this descriptor defaults to "i2c".
+If not specified, the name of this descriptor defaults to "i2c".
 
 .. table:: I²C slave descriptor layout
         :class: align-center
@@ -931,7 +931,7 @@ ERROR DETECTION ALGORITHMS`_).
         is still within a few %). For sizes above about 250 bits, these
         still stick within 2x the bound, which is still good.
 
-        Given that our inital EEPROM is 512 bits, but it seems unlikely
+        Given that our initial EEPROM is 512 bits, but it seems unlikely
         that it will ever be less than half full, both of these
         polynomials seem promising. The fact that they scale well into
         bigger EEPROM sizes is useful for future expansion.
@@ -954,7 +954,7 @@ complete EEPROM to find the relevant info.
 
 In the current version of the layout, the slave will only need to access
 its unique identifier. This means that, in theory, the scout could
-change the EEPROM contents, includig changing to a different layout
+change the EEPROM contents, including changing to a different layout
 version, as long as the unique identifier doesn't move to a different
 place.
 
@@ -986,7 +986,7 @@ encounters a descriptor type it does not know about, it will skip the
 entire backpack as well and flag an error to the user. It would seem
 obvious to only skip the unknown descriptor, but that descriptor could
 be essential to the backpack operation, so the user will have to upgrade
-the scout's firmware anyway). Also, the descriptors do not explicitely
+the scout's firmware anyway). Also, the descriptors do not explicitly
 store their length, so a scout cannot actually skip a descriptor if it
 does not understand it.
 
@@ -1016,7 +1016,7 @@ position. This needs a bump of the major version. Deprecated fields
 should always contain all zeroes.
 
 In the descriptors, dropping an old field entirely might also make sense
-sometimes, to prevent it takiing up too much space.
+sometimes, to prevent it taking up too much space.
 
 If a new field needs to be added, it can be added in place of an older
 deprecated field, or at the end if there is no old field. This needs a
@@ -1035,12 +1035,12 @@ minor version (since a scout that encounters an unknown descriptor type
 will also flag an "unsupported EEPROM layout" error).
 
 For the same reason, adding new values to an enumeration field (*e.g.*,
-adding a new UART speed) can also happen with just a mnior version bump.
+adding a new UART speed) can also happen with just a minor version bump.
 
 .. admonition:: Future Expansion: Configurable parameters
 
         In the future, we'd like to use the tiny to configure some
-        parameters as well. Obvious usecase is to set an I²C address
+        parameters as well. Obvious use case is to set an I²C address
         through some backpack bus command and have the tiny toggle the
         right pins on some chip.
 

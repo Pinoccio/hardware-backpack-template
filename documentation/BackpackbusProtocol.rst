@@ -22,7 +22,7 @@ document, but is the subject of separate specification.
 The bus is a strict master-slave bus, where the Pinoccio scout is the
 master and all backpacks are slaves. All communication is initiated by
 the master and even when the slaves are sending a bit, the master
-iniates the start of every bit.
+initiates the start of every bit.
 
 The bus is designed to typically transfer 1400 bits per second (though
 it can be a bit slower, depending on exact clock rate of the slaves).
@@ -39,8 +39,8 @@ Hardware
 The bus is an open-collector bus. This means there is a pull-up resistor
 that pulls the line high when idle and each device has its bus pin in
 high-impedance / open collector mode. When a device wants to pull the
-line low, it grounds the bus pin, making the the bus go low and causing
-a small current to flow through the pull-up resistor.
+line low, it grounds the bus pin, making the bus go low and causing a
+small current to flow through the pull-up resistor.
 
 The timings of the protocol have been chosen such that they will work
 under the following conditions:
@@ -107,7 +107,7 @@ not cause any adverse effects.
 
 .. admonition:: Rationale: Ending a transaction
 
-        The protocol must some way to explicitely define the end of a
+        The protocol must some way to explicitly define the end of a
         transaction, to prevent the slave from staying in some other
         state for potentially a long time. Consider for example writing
         some data to the EEPROM. If the master would simply stop after
@@ -204,13 +204,13 @@ exceeds its "send 0" time).
 Implementations should make sure that, under nominal circumstances, the
 durations are implemented like shown in the typical column.
 Additionally, under extreme circumstances (*e.g.*, oscillator
-inacurracy, environmental temperatures, etc.) the values should be
+inaccuracy, environmental temperatures, etc.) the values should be
 guaranteed to lie within the minimum and maximum.
 
 .. admonition:: Rationale: Timings
 
         When choosing the timings for the bus, the master is assumed to
-        have an accurate crystal, with negligable deviations from the
+        have an accurate crystal, with negligible deviations from the
         nominal frequency. The master timings simply allow +/- 50μs or
         25μs, so the exact software implementation does not need to jump
         through hoops to get very exact timings. The reset duration has
@@ -320,7 +320,7 @@ Under normal circumstances, the slave sends an ack and the devices
 continue with the next byte. However, when some error condition occurs,
 the slave can send a nack. This can happen when for example:
 
-* A parity erorr occured
+* A parity error occurred
 * The previous received byte did not make sense to the slave (e.g., unknown
   command, invalid address, etc.)
 * There was an error processing the previous byte (e.g. EEPROM write
@@ -455,7 +455,7 @@ the bus and not send any handshaking bits.
         implementations.
 
 =============  =====================
-Adress         Meaning
+Address        Meaning
 =============  =====================
 0 - 127        Slave addresses
 128 - 253      Reserved
@@ -585,7 +585,7 @@ Check           0x3e
 
         An alternative would be the 0x98 polynomial, which is optimal
         for 42 to 119 databits, used in the One-Wire protocol for the
-        same purpose and for which an optimzed implementation is
+        same purpose and for which an optimized implementation is
         available in avr-libc.
 
         However, the entire EEPROM will also need a checksum. Since the
@@ -628,7 +628,7 @@ bus to see if anyone else is transmitting a 0. If so, it will stop
 transmitting their unique id for this round, allowing the slaves that
 transmitted a 0 to continue. Since all slaves will have a different id,
 there will eventually be exactly one slave that finishes transmitting
-its address. Furthmore, this slave will know that it completely sent
+its address. Furthermore, this slave will know that it completely sent
 its address without conflicts. This slave assigns itself the next
 address, drops off the bus and is now considered enumerated.
 
@@ -742,7 +742,7 @@ layout specification
 When the WRITE_EEPROM command is used to write a read-only byte and the
 value to write is different from the current value, the slave sends a
 nack and the "Read-only byte" error code. If the value is not changed,
-the slave sends an ack just as if the byte was written succesfully.
+the slave sends an ack just as if the byte was written successfully.
 
 If the byte cannot be written for any other reason, the "Write failed"
 error code is returned.
