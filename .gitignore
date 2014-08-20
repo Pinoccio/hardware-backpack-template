@@ -1,4 +1,6 @@
 eagle/*#*
 .DS_Store
+*.elf
+*.hex
 *.swp
 *.pyc
