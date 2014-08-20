@@ -544,7 +544,7 @@ Check           0x3e
 
 .. admonition:: Hint: Pycrc options
 
-        For reference, pycrc is a python library and program that can be
+        For reference, `pycrc`_ is a python library and program that can be
         used to calculate arbitrary CRC values and generate C code for
         them. The commands used to generate the example checksum and
         check value above are::
@@ -604,6 +604,7 @@ Check           0x3e
 .. _The Effectiveness of Checksums for Embedded Networks: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.72.4059&rep=rep1&type=pdf
 .. _CRC Selection for Embedded Network Messages: http://www.ece.cmu.edu/~koopman/crc/
 .. _A PAINLESS GUIDE TO CRC ERROR DETECTION ALGORITHMS: http://www.csm.ornl.gov/~dunigan/crc.html
+.. _pycrc: http://www.tty1.net/pycrc/index_en.html
 
 ===============
 Bus enumeration
