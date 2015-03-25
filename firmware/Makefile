@@ -37,7 +37,7 @@ dump: firmware.elf
 	avr-objdump -S $< | less
 
 size: firmware.elf
-	avr-size -C $<
+	avr-size --mcu=$(GCC_MCU) -C $<
 
 read_eeprom:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U eeprom:r:-:h
@@ -58,7 +58,7 @@ eeprom_id: SERIALNO:=$(shell head -c3 /dev/urandom |hexdump -v -e '/1 "%02X"')
 eeprom_id: REVISION:=$(shell head -c1 /dev/urandom |hexdump -v -e '/1 "%02X"')
 eeprom_id: ID:=$(PROTO_VERSION)$(MODEL)$(REVISION)$(SERIALNO)
 # This needs pycrc from http://www.tty1.net/pycrc/index_en.html / https://github.com/tpircher/pycrc
-eeprom_id: CHECKSUM:=$(shell printf "%02x" $$(pycrc --width=8 --POly=0x2f --xor-in=0 --reflect-in=false --reflect-out=false --xor-out=0 --check-hexstring $(ID)))
+eeprom_id: CHECKSUM:=$(shell printf "%02x" $$(pycrc --width=8 --poly=0x2f --xor-in=0 --reflect-in=false --reflect-out=false --xor-out=0 --check-hexstring $(ID)))
 eeprom_id: DATA=$(shell echo $(LAYOUT_VERSION)$(EEPROM_SIZE)$(ID)$(CHECKSUM) | tr '[:upper:]' '[:lower:]' | sed 's/../0x& /g')
 eeprom_id:
 	avrdude -c $(PROGRAMMER) -p $(AVRDUDE_PART) -P $(SERIAL) -V -U "eeprom:w:$(DATA):m"
@@ -66,4 +66,4 @@ eeprom_id:
 clean:
 	rm -f firmware.S firmware.elf firmware.hex
 
-.PHONY: upload dump read_eeprom read_fuses write_fuses eeprom_id clean
+.PHONY: all upload dump size read_eeprom read_fuses write_fuses eeprom_id clean
