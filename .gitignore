@@ -1,5 +1,6 @@
 eagle/*#*
 .DS_Store
+Makefile.local
 *.elf
 *.hex
 *.swp
